@@ -13,4 +13,4 @@
 ###
 ### You should have received a copy of the GNU General Public License
 ### along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+configure_file(config.h.in ${CMAKE_CURRENT_BINARY_DIR}/dyldo_config.h @ONLY)

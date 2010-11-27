@@ -1,4 +1,4 @@
-### dyldo is a dll injection strategy for the Mac.
+### dyldo is a dll injection strategy
 ### Copyright (C) 2010  Vikas Naresh Kumar
 ###
 ### This program is free software: you can redistribute it and/or modify

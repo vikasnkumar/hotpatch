@@ -1,0 +1,97 @@
+/*
+ *  dyldo is a dll injection strategy.
+ *  Copyright (C) 2010 Vikas Naresh Kumar
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#ifndef __DYLDO_CONFIG_H__
+#define __DYLDO_CONFIG_H__
+
+#cmakedefine DYLDO_HAS_STDIO_H
+#ifdef DYLDO_HAS_STDIO_H
+	#include <stdio.h>
+#endif
+
+#cmakedefine DYLDO_HAS_STDLIB_H
+#ifdef DYLDO_HAS_STDLIB_H
+	#include <stdlib.h>
+#endif
+
+#cmakedefine DYLDO_HAS_STRING_H
+#ifdef DYLDO_HAS_STRING_H
+	#include <string.h>
+#endif
+
+#cmakedefine DYLDO_HAS_STDINT_H
+#ifdef DYLDO_HAS_STDINT_H
+	#include <stdint.h>
+#endif
+
+#cmakedefine DYLDO_HAS_TIME_H
+#ifdef DYLDO_HAS_TIME_H
+	#include <time.h>
+#endif
+
+#cmakedefine DYLDO_HAS_SYS_TYPES_H
+#ifdef DYLDO_HAS_SYS_TYPES_H
+	#include <sys/types.h>
+#endif
+
+/* for the APPLE */
+#cmakedefine DYLDO_HAS_MACH_MESSAGE_H
+#cmakedefine DYLDO_HAS_MACH_MACH_H
+#cmakedefine DYLDO_HAS_MACH_TASK_H
+#cmakedefine DYLDO_HAS_MACH_MACHTRAPS_H
+#cmakedefine DYLDO_HAS_MACH_MACHERROR_H
+#cmakedefine DYLDO_HAS_MACH_TASKFORPID_FN
+
+/* for the Linux */
+#cmakedefine DYLDO_HAS_LINUX_ELF_H
+#ifdef DYLDO_HAS_LINUX_ELF_H
+	#include <elf.h>
+#endif
+
+#cmakedefine DYLDO_HAS_LINUX_DLFCN_H
+#ifdef DYLDO_HAS_LINUX_DLFCN_H
+	#include <dlfcn.h>
+#endif
+
+#cmakedefine DYLDO_HAS_LINUX_LINK_H
+#ifdef DYLDO_HAS_LINUX_LINK_H
+	#include <link.h>
+#endif
+
+#cmakedefine DYLDO_HAS_LINUX_PTHREAD_H
+#ifdef DYLDO_HAS_LINUX_PTHREAD_H
+	#include <pthread.h>
+#endif
+
+#cmakedefine DYLDO_HAS_LINUX_SETJMP_H
+#ifdef DYLDO_HAS_LINUX_SETJMP_H
+	#include <setjmp.h>
+#endif
+
+#cmakedefine DYLDO_HAS_LINUX_SIGNAL_H
+#ifdef DYLDO_HAS_LINUX_SIGNAL_H
+	#include <signal.h>
+#endif
+
+#cmakedefine DYLDO_HAS_LINUX_SYS_PTRACE_H
+#ifdef DYLDO_HAS_LINUX_SYS_PTRACE_H
+	#include <ptrace.h>
+#endif
+
+#cmakedefine DYLDO_HAS_LINUX_DLITERPHDR_FN
+
+#endif /* __DYLDO_CONFIG_H__ */
+

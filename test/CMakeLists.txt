@@ -13,4 +13,15 @@
 ###
 ### You should have received a copy of the GNU General Public License
 ### along with this program.  If not, see <http://www.gnu.org/licenses/>.
+project(unit_tests)
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+add_executable(test1 ptrace.c)
+target_link_libraries(test1 ${DYLDO_USES_LIBRARIES})
+add_test(test1 ${CMAKE_CURRENT_BINARY_DIR}/test1)
+
+add_executable(test2 self.c)
+target_link_libraries(test2 ${DYLDO_USES_LIBRARIES})
+add_test(test2 ${CMAKE_CURRENT_BINARY_DIR}/test2)

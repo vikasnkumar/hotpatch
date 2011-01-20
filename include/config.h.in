@@ -17,6 +17,11 @@
 #ifndef __DYLDO_CONFIG_H__
 #define __DYLDO_CONFIG_H__
 
+#cmakedefine DYLDO_HAS_ERRNO_H
+#ifdef DYLDO_HAS_ERRNO_H
+	#include <errno.h>
+#endif
+
 #cmakedefine DYLDO_HAS_STDIO_H
 #ifdef DYLDO_HAS_STDIO_H
 	#include <stdio.h>
@@ -37,6 +42,16 @@
 	#include <stdint.h>
 #endif
 
+#cmakedefine DYLDO_HAS_STDDEF_H
+#ifdef DYLDO_HAS_STDDEF_H
+	#include <stddef.h>
+#endif
+
+#cmakedefine DYLDO_HAS_STDARG_H
+#ifdef DYLDO_HAS_STDARG_H
+	#include <stdarg.h>
+#endif
+
 #cmakedefine DYLDO_HAS_TIME_H
 #ifdef DYLDO_HAS_TIME_H
 	#include <time.h>
@@ -46,6 +61,13 @@
 #ifdef DYLDO_HAS_SYS_TYPES_H
 	#include <sys/types.h>
 #endif
+
+#cmakedefine DYLDO_HAS_UNISTD_H
+#ifdef DYLDO_HAS_UNISTD_H
+	#include <unistd.h>
+#endif
+
+#cmakedefine DYLDO_HAS_ASSERT_H
 
 /* for the APPLE */
 #cmakedefine DYLDO_HAS_MACH_MESSAGE_H
@@ -88,10 +110,33 @@
 
 #cmakedefine DYLDO_HAS_LINUX_SYS_PTRACE_H
 #ifdef DYLDO_HAS_LINUX_SYS_PTRACE_H
-	#include <ptrace.h>
+	#include <sys/ptrace.h>
+#endif
+
+#cmakedefine DYLDO_HAS_LINUX_SYS_WAIT_H
+#ifdef DYLDO_HAS_LINUX_SYS_WAIT_H
+	#include <sys/wait.h>
+#endif
+
+#cmakedefine DYLDO_HAS_LINUX_SYS_STAT_H
+#ifdef DYLDO_HAS_LINUX_SYS_STAT_H
+	#include <sys/stat.h>
+#endif
+
+#cmakedefine DYLDO_HAS_LINUX_FCNTL_H
+#ifdef DYLDO_HAS_LINUX_FCNTL_H
+	#include <fcntl.h>
+#endif
+
+#cmakedefine DYLDO_HAS_LINUX_SYS_USER_H
+#ifdef DYLDO_HAS_LINUX_SYS_USER_H
+	#include <sys/types.h>
+	#include <linux/user.h>
 #endif
 
 #cmakedefine DYLDO_HAS_LINUX_DLITERPHDR_FN
+
+#define DYLDO_VOIDPTR_SIZE @DYLDO_VOIDPTR_SIZE@
 
 #endif /* __DYLDO_CONFIG_H__ */
 

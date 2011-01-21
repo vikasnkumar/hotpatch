@@ -1,5 +1,5 @@
 ### dyldo is a dll injection strategy
-### Copyright (C) 2010  Vikas Naresh Kumar
+### Copyright (C) 2010-2011  Vikas Naresh Kumar
 ###
 ### This program is free software: you can redistribute it and/or modify
 ### it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ add_executable(test1 ptrace.c)
 target_link_libraries(test1 ${DYLDO_USES_LIBRARIES})
 add_test(test1 ${CMAKE_CURRENT_BINARY_DIR}/test1)
 
+add_executable(dummy dummy.c)
 add_executable(test2 self.c)
 target_link_libraries(test2 ${DYLDO_USES_LIBRARIES})
 add_test(test2 ${CMAKE_CURRENT_BINARY_DIR}/test2)

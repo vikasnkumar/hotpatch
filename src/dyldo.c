@@ -16,3 +16,56 @@
  */
 #include <dyldo_config.h>
 #include <dyldo.h>
+
+#define OS_MAX_BUFFER 512
+
+int os_get_exe_fd(pid_t pid)
+{
+	int fd = -1;
+	if (pid > 0) {
+		char buf[OS_MAX_BUFFER];
+		memset(&buf, 0, sizeof(buf));
+		snprintf(buf, sizeof(buf), "/proc/%d/exe", pid);
+		fd = open(buf, O_RDONLY);
+		if (fd < 0) {
+			int st = errno;
+			fprintf(stderr, "[%s:%d] File opening error. Error: %s\n",
+					__func__, __LINE__, strerror(st));
+		}
+	}
+	return fd;
+}
+
+struct dyldo {
+	int inserted;
+	char *exename;
+	int fd_exe;
+};
+
+void *dyldo_takeout()
+{
+	struct dyldo *dy = NULL;
+	dy = malloc(sizeof(*dy));
+	if (dy) {
+		dy->inserted = 0;
+	}
+	return dy;
+}
+
+void dyldo_putback(void *dy)
+{
+	if (dy) {
+		free(dy);
+		dy = NULL;
+	}
+}
+
+int dyldo_insert(void *dy, pid_t pid, const char *dll, const char *symbol,
+				void *arg)
+{
+	if (!dy || pid <= 0) {
+		return -1;
+	}
+	dy->fd_exe = os_get_exe_fd(pid);
+	return 0;
+}

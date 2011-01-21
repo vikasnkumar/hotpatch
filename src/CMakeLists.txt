@@ -14,3 +14,7 @@
 ### You should have received a copy of the GNU General Public License
 ### along with this program.  If not, see <http://www.gnu.org/licenses/>.
 project(dyldo)
+
+add_definitions(-D_BSD_SOURCE)
+add_library(dyldo SHARED dyldo.c)
+target_link_libraries(dyldo dl elf)

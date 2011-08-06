@@ -1,5 +1,5 @@
 /*
- *  dyldo is a dll injection strategy.
+ *  hotpatch is a dll injection strategy.
  *  Copyright (C) 2010 Vikas Naresh Kumar
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,8 +14,8 @@
  * You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <dyldo_config.h>
-#ifdef DYLDO_HAS_ASSERT_H
+#include <hotpatch_config.h>
+#ifdef HOTPATCH_HAS_ASSERT_H
 	#undef NDEBUG
 	#include <assert.h>
 #endif

@@ -14,8 +14,8 @@
  * You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef __HOTPATCH_CONFIG_H__
-#define __HOTPATCH_CONFIG_H__
+#ifndef __LIBHOTPATCH_CONFIG_H__
+#define __LIBHOTPATCH_CONFIG_H__
 
 #cmakedefine HOTPATCH_HAS_ERRNO_H
 #ifdef HOTPATCH_HAS_ERRNO_H
@@ -138,5 +138,5 @@
 
 #define HOTPATCH_VOIDPTR_SIZE @HOTPATCH_VOIDPTR_SIZE@
 
-#endif /* __HOTPATCH_CONFIG_H__ */
+#endif /* __LIBHOTPATCH_CONFIG_H__ */
 

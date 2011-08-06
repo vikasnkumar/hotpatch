@@ -40,6 +40,7 @@ int test_child(pid_t pid)
 		st = errno;
 		printf("error: %s\n", strerror(st));
 	}
+    close(memfd);
 	return st;
 }
 
@@ -121,7 +122,9 @@ int main(int argc, char **argv, char **envp)
 		}
 		retval = ptrace(PTRACE_PEEKTEXT, pid, cldata->regs.rip, NULL);
 		printf("[%s:%d] Return value: %ld. \n", __func__, __LINE__, retval);
-/*		ptrace(PTRACE_CONT, pid, 0, 0); */
+        if (argc > 2) {
+            ptrace(PTRACE_CONT, pid, 0, 0);
+        }
 		printf("[%s:%d] \n", __func__, __LINE__);
 		free(cldata);
 		if (test_child(pid) < 0) {

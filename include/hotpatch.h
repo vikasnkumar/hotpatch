@@ -14,10 +14,14 @@
  * You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef __HOTPATCH_H__
-#define __HOTPATCH_H__
+#ifndef __LIBHOTPATCH_H__
+#define __LIBHOTPATCH_H__
 
-#include <hotpatch_config.h>
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+#include <stdint.h>
 
 typedef union {
 	enum {
@@ -51,4 +55,8 @@ ptr32or64_t *hotpatch_read_symbol(hotpatch_t *, const char *symbol);
 
 int hotpatch_insert(hotpatch_t *hotpatch, const char *dll, const char *symbol, void *arg);
 
-#endif /* __HOTPATCH_H__ */
+#ifdef __cplusplus
+} /* end of extern C */
+#endif /* __cplusplus */
+
+#endif /* __LIBHOTPATCH_H__ */

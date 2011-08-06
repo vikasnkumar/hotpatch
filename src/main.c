@@ -17,8 +17,71 @@
 #include <hotpatch_config.h>
 #include <hotpatch.h>
 
+struct hp_options {
+    pid_t pid;
+    int verbose;
+};
+
+void print_usage(const char *app)
+{
+    printf("Usage: %s [options] <PID of process to patch>\n", app);
+}
+
+void print_options(const struct hp_options *opts)
+{
+	if (opts && opts->verbose > 0) {
+		printf(
+				"Options Given:\n"
+				"Verbose Level: %d\n"
+				"Process PID: %d\n",
+				opts->verbose,
+				opts->pid
+			  );
+	}
+}
+
+int parse_arguments(int argc, char **argv, struct hp_options *opts)
+{
+    if (argc > 0 && argv && opts) {
+        int opt = 0;
+        extern int optind;
+        extern char *optarg;
+        optind = 1;
+        while ((opt = getopt(argc, argv, "hv::")) != -1) {
+            switch (opt) {
+            case 'v':
+                opts->verbose += optarg ? (int)strnlen(optarg, 5) : 1;
+                break;
+            case 'h':
+            default:
+                print_usage(argv[0]);
+                return -1;
+            }
+        }
+        if (optind >= argc) {
+            printf("Expected more arguments.\n");
+            print_usage(argv[0]);
+            return -1;
+        }
+        opts->pid = (pid_t)strtol(argv[optind], NULL, 10);
+        if (opts->pid == 0) {
+            printf("Process PID can't be 0. Tried parsing: %s\n", argv[optind]);
+			return -1;
+        }
+        return 0;
+    }
+    return -1;
+}
+
 int main(int argc, char **argv)
 {
-
+    struct hp_options opts = { 0 };
+    hotpatch_t *hp = NULL;
+    /* parse all arguments first */
+    if (parse_arguments(argc, argv, &opts) < 0) {
+        return -1;
+    }
+    print_options(&opts);
+	hp = hotpatch_create(opts.pid, opts.verbose);
     return 0;
 }

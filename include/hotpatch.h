@@ -23,6 +23,9 @@ extern "C" {
 
 #include <stdint.h>
 
+#define HOTPATCH_MAJOR_VERSION 0
+#define HOTPATCH_MINOR_VERSION 1
+
 typedef union {
 	enum {
 		PTR_IS_32BIT,
@@ -37,12 +40,13 @@ typedef union {
 
 typedef struct hotpatch_is_opaque hotpatch_t;
 
-/* create the hotpatch object for the running process whose PID is given as an
+/* Create the hotpatch object for the running process whose PID is given as an
  * argument. Returns a pointer to an opaque object that must be freed by
  * hotpatch_delete() function later to conserve memory.
  */
-hotpatch_t *hotpatch_create(pid_t);
-/* delete memory and close all open handles related to the hotpatch'ed process.
+hotpatch_t *hotpatch_create(pid_t, int);
+/*!
+ * delete memory and close all open handles related to the hotpatch'ed process.
  * This can lead to the hotpatch'ed process to be unstable if not done in the same
  * thread as create function above.
  */

@@ -15,7 +15,6 @@
 ### along with this program.  If not, see <http://www.gnu.org/licenses/>.
 project(hotpatch)
 
-add_definitions(-D_BSD_SOURCE)
 add_library(hotpatch SHARED hotpatch.c)
 target_link_libraries(hotpatch ${HOTPATCH_DEP_LIBS})
 install(TARGETS hotpatch LIBRARY DESTINATION lib)

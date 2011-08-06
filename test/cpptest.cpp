@@ -20,7 +20,7 @@
 int main(int argc, char **argv)
 {
     hotpatch_t *hp = NULL;
-    hp = hotpatch_create(0);
-    hotpatch_destroy(hp);
+    //hp = hotpatch_create(0, 0);
+    //hotpatch_destroy(hp);
     return 0;
 }

@@ -47,6 +47,7 @@
 
 struct hotpatch_is_opaque {
 	pid_t pid;
+	int verbose;
 	enum {
 		HOTPATCH_EXE_IS_NEITHER,
 		HOTPATCH_EXE_IS_32BIT,
@@ -64,17 +65,23 @@ struct hotpatch_is_opaque {
 	int inserted;
 };
 
-static int exe_open_file(pid_t pid)
+/* each of the exe_* functions have to be reentrant and thread-safe */
+static int exe_open_file(pid_t pid, int verbose)
 {
 	int fd = -1;
 	if (pid > 0) {
 		char buf[OS_MAX_BUFFER];
 		memset(buf, 0, sizeof(buf));
 		snprintf(buf, sizeof(buf), "/proc/%d/exe", pid);
+		if (verbose > 3)
+			fprintf(stderr, "[%s:%d] Exe symlink for pid %d : %s\n", __func__,
+					__LINE__, pid, buf);
 		fd = open(buf, O_RDONLY);
-		if (fd < 0) {
+		if (fd < 0)
 			LOG_ERROR_FILE_OPEN(buf);
-		}
+		if (verbose > 3)
+			fprintf(stderr, "[%s:%d] Exe file descriptor: %d\n", __func__,
+					__LINE__, fd);
 	}
 	return fd;
 }
@@ -270,16 +277,17 @@ static int exe_get_symboltable(hotpatch_t *hp)
 	return 0;
 }
 
-hotpatch_t *hotpatch_create(pid_t pid)
+hotpatch_t *hotpatch_create(pid_t pid, int verbose)
 {
 	hotpatch_t *hp = NULL;
 	if (pid > 0) {
 		hp = malloc(sizeof(*hp));
 		if (hp) {
 			memset(hp, 0, sizeof(*hp));
+			hp->verbose = verbose;
 			hp->pid = pid;
 			hp->is64 = HOTPATCH_EXE_IS_NEITHER;
-			hp->fd_exe = exe_open_file(hp->pid);
+			hp->fd_exe = exe_open_file(hp->pid, hp->verbose);
 			if (hp->fd_exe > 0) {
 				if (exe_load_headers(hp) >= 0) {
 					LOG_INFO_HEADERS_LOADED;
@@ -331,4 +339,13 @@ int hotpatch_insert(hotpatch_t *hp, const char *dll, const char *symbol,
 		return -1;
 	}
 	return 0;
+}
+
+size_t hotpatch_strnlen(const char *str, size_t maxlen)
+{
+    size_t len = 0;
+    /* succinct code */
+    if (str)
+        while (len < maxlen && str[len++] != '\0');
+    return len;
 }

@@ -17,6 +17,15 @@
 #ifndef __LIBHOTPATCH_CONFIG_H__
 #define __LIBHOTPATCH_CONFIG_H__
 
+#if (defined __GNUC__ && !defined _GNU_SOURCE)
+    #define _GNU_SOURCE 1
+#endif
+
+#cmakedefine HOTPATCH_HAS_FEATURES_H
+#ifdef HOTPATCH_HAS_FEATURES_H
+    #include <features.h>
+#endif
+
 #cmakedefine HOTPATCH_HAS_ERRNO_H
 #ifdef HOTPATCH_HAS_ERRNO_H
 	#include <errno.h>
@@ -35,6 +44,12 @@
 #cmakedefine HOTPATCH_HAS_STRING_H
 #ifdef HOTPATCH_HAS_STRING_H
 	#include <string.h>
+#endif
+
+#cmakedefine HOTPATCH_HAS_STRNLEN_FN
+#ifndef HOTPATCH_HAS_STRNLEN_FN
+    size_t hotpatch_strnlen(const char *str, size_t maxlen);
+    #define strnlen(a,b) hotpatch_strnlen(a,b)
 #endif
 
 #cmakedefine HOTPATCH_HAS_STDINT_H

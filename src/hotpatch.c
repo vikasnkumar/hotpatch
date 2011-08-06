@@ -1,5 +1,5 @@
 /*
- *  dyldo is a dll injection strategy.
+ *  hotpatch is a dll injection strategy.
  *  Copyright (C) 2010-2011 Vikas Naresh Kumar
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,8 +14,8 @@
  * You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include <dyldo_config.h>
-#include <dyldo.h>
+#include <hotpatch_config.h>
+#include <hotpatch.h>
 
 #define OS_MAX_BUFFER 512
 #define LOG_ERROR_INVALID_PID(A) do { \
@@ -45,12 +45,12 @@
 	fprintf(stderr, "[%s:%d] Exe headers loaded.\n", __func__, __LINE__); \
 } while (0)
 
-struct dyldo_is_opaque {
+struct hotpatch_is_opaque {
 	pid_t pid;
 	enum {
-		DYLDO_EXE_IS_NEITHER,
-		DYLDO_EXE_IS_32BIT,
-		DYLDO_EXE_IS_64BIT
+		HOTPATCH_EXE_IS_NEITHER,
+		HOTPATCH_EXE_IS_32BIT,
+		HOTPATCH_EXE_IS_64BIT
 	} is64;
 	int fd_exe;
 	void *proghdrs; /* program headers */
@@ -86,21 +86,21 @@ static int exe_elf_identify(unsigned char *e_ident, size_t size)
 			(e_ident[EI_MAG1] == ELFMAG1) &&
 			(e_ident[EI_MAG2] == ELFMAG2) &&
 			(e_ident[EI_MAG3] == ELFMAG3)) {
-			int is64 = DYLDO_EXE_IS_NEITHER;
+			int is64 = HOTPATCH_EXE_IS_NEITHER;
 			/* magic number says this is an ELF file */
 			switch (e_ident[EI_CLASS]) {
 			case ELFCLASS32:
-				is64 = DYLDO_EXE_IS_32BIT;
+				is64 = HOTPATCH_EXE_IS_32BIT;
 				break;
 			case ELFCLASS64:
-				is64 = DYLDO_EXE_IS_64BIT;
+				is64 = HOTPATCH_EXE_IS_64BIT;
 				break;
 			case ELFCLASSNONE:
 			default:
-				is64 = DYLDO_EXE_IS_NEITHER;
+				is64 = HOTPATCH_EXE_IS_NEITHER;
 				break;
 			}
-			if (is64 != DYLDO_EXE_IS_NEITHER) {
+			if (is64 != HOTPATCH_EXE_IS_NEITHER) {
 				int isbigendian = -1;
 				int iscurrent = 0;
 				int islinux = 0;
@@ -128,21 +128,21 @@ static int exe_elf_identify(unsigned char *e_ident, size_t size)
 			}
 		}
 	}
-	return DYLDO_EXE_IS_NEITHER;
+	return HOTPATCH_EXE_IS_NEITHER;
 }
 
 
-static int exe_load_headers(dyldo_t *dy)
+static int exe_load_headers(hotpatch_t *hp)
 {
 	Elf32_Ehdr hdr32;
 	Elf64_Ehdr hdr64;
 	off_t shdroffset = 0;
 	off_t phdroffset = 0;
 	int fd = -1;
-	if (!dy) {
+	if (!hp) {
 		return -1;
 	}
-	fd = dy->fd_exe;
+	fd = hp->fd_exe;
 	memset(&hdr32, 0, sizeof(hdr32));
 	if (lseek(fd, 0, SEEK_SET) < 0) {
 		LOG_ERROR_FILE_SEEK;
@@ -152,26 +152,26 @@ static int exe_load_headers(dyldo_t *dy)
 		LOG_ERROR_FILE_READ;
 		return -1;
 	}
-	dy->is64 = exe_elf_identify(hdr32.e_ident, EI_NIDENT);
-	switch (dy->is64) {
-	case DYLDO_EXE_IS_32BIT:
+	hp->is64 = exe_elf_identify(hdr32.e_ident, EI_NIDENT);
+	switch (hp->is64) {
+	case HOTPATCH_EXE_IS_32BIT:
 		if (hdr32.e_machine != EM_386) {
 			LOG_ERROR_UNSUPPORTED_PROCESSOR;
 			return -1;
 		}
 		if (hdr32.e_shoff > 0) {
 			shdroffset = 0 + hdr32.e_shoff;
-			dy->sechdrnum = 0 + hdr32.e_shnum;
-			dy->sechdrsize = 0 + hdr32.e_shnum * hdr32.e_shentsize;
-			dy->secnametblidx = 0 + hdr32.e_shstrndx;
+			hp->sechdrnum = 0 + hdr32.e_shnum;
+			hp->sechdrsize = 0 + hdr32.e_shnum * hdr32.e_shentsize;
+			hp->secnametblidx = 0 + hdr32.e_shstrndx;
 		}
 		if (hdr32.e_phoff > 0) {
 			phdroffset = 0 + hdr32.e_phoff;
-			dy->proghdrnum = 0 + hdr32.e_phnum;
-			dy->proghdrsize = 0 + hdr32.e_phnum * hdr32.e_phentsize;
+			hp->proghdrnum = 0 + hdr32.e_phnum;
+			hp->proghdrsize = 0 + hdr32.e_phnum * hdr32.e_phentsize;
 		}
 		break;
-	case DYLDO_EXE_IS_64BIT:
+	case HOTPATCH_EXE_IS_64BIT:
 		memset(&hdr64, 0, sizeof(hdr64));
 		if (lseek(fd, 0, SEEK_SET) < 0) {
 			LOG_ERROR_FILE_SEEK;
@@ -187,48 +187,53 @@ static int exe_load_headers(dyldo_t *dy)
 		}
 		if (hdr64.e_shoff > 0) {
 			shdroffset = 0 + hdr64.e_shoff;
-			dy->sechdrnum = 0 + hdr64.e_shnum;
-			dy->sechdrsize = 0 + hdr64.e_shnum * hdr64.e_shentsize;
-			dy->secnametblidx = 0 + hdr64.e_shstrndx;
+			hp->sechdrnum = 0 + hdr64.e_shnum;
+			hp->sechdrsize = 0 + hdr64.e_shnum * hdr64.e_shentsize;
+			hp->secnametblidx = 0 + hdr64.e_shstrndx;
 		}
 		if (hdr64.e_phoff > 0) {
 			phdroffset = 0 + hdr64.e_phoff;
-			dy->proghdrnum = 0 + hdr64.e_phnum;
-			dy->proghdrsize = 0 + hdr64.e_phnum * hdr64.e_phentsize;
+			hp->proghdrnum = 0 + hdr64.e_phnum;
+			hp->proghdrsize = 0 + hdr64.e_phnum * hdr64.e_phentsize;
 		}
 		break;
-	case DYLDO_EXE_IS_NEITHER:
+	case HOTPATCH_EXE_IS_NEITHER:
 	default:
 		return -1;
 	}
-	if (shdroffset > 0 && dy->sechdrsize > 0) {
-		dy->sechdrs = malloc(dy->sechdrsize);
-		if (!dy->sechdrs) {
+	if (shdroffset > 0 && hp->sechdrsize > 0) {
+		hp->sechdrs = malloc(hp->sechdrsize);
+		if (!hp->sechdrs) {
 			LOG_ERROR_OUT_OF_MEMORY;
 			return -1;
 		}
-		memset(dy->sechdrs, 0, dy->sechdrsize);
+		memset(hp->sechdrs, 0, hp->sechdrsize);
 		if (lseek(fd, shdroffset, SEEK_SET) < 0) {
 			LOG_ERROR_FILE_SEEK;
 			return -1;
 		}
-		if (read(fd, dy->sechdrs, dy->sechdrsize) < 0) {
+		if (read(fd, hp->sechdrs, hp->sechdrsize) < 0) {
 			LOG_ERROR_FILE_READ;
 			return -1;
 		}
+		/* copy section string table over.
+		// read section names in
+		// check for symbol tables and string tables
+		// copy the string tables in
+        */
 	}
-	if (phdroffset > 0 && dy->proghdrsize > 0) {
-		dy->proghdrs = malloc(dy->proghdrsize);
-		if (!dy->proghdrs) {
+	if (phdroffset > 0 && hp->proghdrsize > 0) {
+		hp->proghdrs = malloc(hp->proghdrsize);
+		if (!hp->proghdrs) {
 			LOG_ERROR_OUT_OF_MEMORY;
 			return -1;
 		}
-		memset(dy->proghdrs, 0, dy->proghdrsize);
+		memset(hp->proghdrs, 0, hp->proghdrsize);
 		if (lseek(fd, phdroffset, SEEK_SET) < 0) {
 			LOG_ERROR_FILE_SEEK;
 			return -1;
 		}
-		if (read(fd, dy->proghdrs, dy->proghdrsize) < 0) {
+		if (read(fd, hp->proghdrs, hp->proghdrsize) < 0) {
 			LOG_ERROR_FILE_READ;
 			return -1;
 		}
@@ -236,47 +241,47 @@ static int exe_load_headers(dyldo_t *dy)
 	return 0;
 }
 
-static int exe_get_symboltable(dyldo_t *dy)
+static int exe_get_symboltable(hotpatch_t *hp)
 {
 	Elf32_Shdr *shdr32 = NULL;
 	Elf64_Shdr *shdr64 = NULL;
-	if (!dy || !dy->sechdrs) {
+	if (!hp || !hp->sechdrs) {
 		return -1;
 	}
-	switch(dy->is64) {
+	switch(hp->is64) {
 	size_t idx = 0;
-	case DYLDO_EXE_IS_32BIT:
-		shdr32 = (Elf32_Shdr *)dy->sechdrs;
-		for (idx = 0; idx < dy->sechdrnum; ++idx) {
+	case HOTPATCH_EXE_IS_32BIT:
+		shdr32 = (Elf32_Shdr *)hp->sechdrs;
+		for (idx = 0; idx < hp->sechdrnum; ++idx) {
 			if (shdr32[idx].sh_type == SHT_SYMTAB) {
 			}
 		}
 		break;
-	case DYLDO_EXE_IS_64BIT:
-		shdr64 = (Elf64_Shdr *)dy->sechdrs;
-		for (idx = 0; idx < dy->sechdrnum; ++idx) {
+	case HOTPATCH_EXE_IS_64BIT:
+		shdr64 = (Elf64_Shdr *)hp->sechdrs;
+		for (idx = 0; idx < hp->sechdrnum; ++idx) {
 
 		}
 		break;
-	case DYLDO_EXE_IS_NEITHER:
+	case HOTPATCH_EXE_IS_NEITHER:
 	default:
 		return -1;
 	}
 	return 0;
 }
 
-dyldo_t *dyldo_create(pid_t pid)
+hotpatch_t *hotpatch_create(pid_t pid)
 {
-	dyldo_t *dy = NULL;
+	hotpatch_t *hp = NULL;
 	if (pid > 0) {
-		dy = malloc(sizeof(*dy));
-		if (dy) {
-			memset(dy, 0, sizeof(*dy));
-			dy->pid = pid;
-			dy->is64 = DYLDO_EXE_IS_NEITHER;
-			dy->fd_exe = exe_open_file(dy->pid);
-			if (dy->fd_exe > 0) {
-				if (exe_load_headers(dy) >= 0) {
+		hp = malloc(sizeof(*hp));
+		if (hp) {
+			memset(hp, 0, sizeof(*hp));
+			hp->pid = pid;
+			hp->is64 = HOTPATCH_EXE_IS_NEITHER;
+			hp->fd_exe = exe_open_file(hp->pid);
+			if (hp->fd_exe > 0) {
+				if (exe_load_headers(hp) >= 0) {
 					LOG_INFO_HEADERS_LOADED;
 				}
 			}
@@ -286,43 +291,43 @@ dyldo_t *dyldo_create(pid_t pid)
 	} else {
 		LOG_ERROR_INVALID_PID(pid);
 	}
-	return dy;
+	return hp;
 }
 
-void dyldo_destroy(dyldo_t *dy)
+void hotpatch_destroy(hotpatch_t *hp)
 {
-	if (dy) {
-		if (dy->fd_exe > 0) {
-			close(dy->fd_exe);
-			dy->fd_exe = -1;
+	if (hp) {
+		if (hp->fd_exe > 0) {
+			close(hp->fd_exe);
+			hp->fd_exe = -1;
 		}
-		if (dy->sechdrs) {
-			free(dy->sechdrs);
-			dy->sechdrs = NULL;
+		if (hp->sechdrs) {
+			free(hp->sechdrs);
+			hp->sechdrs = NULL;
 		}
-		if (dy->proghdrs) {
-			free(dy->proghdrs);
-			dy->proghdrs = NULL;
+		if (hp->proghdrs) {
+			free(hp->proghdrs);
+			hp->proghdrs = NULL;
 		}
-		free(dy);
-		dy = NULL;
+		free(hp);
+		hp = NULL;
 	}
 }
 
-ptr32or64_t *dyldo_read_symbol(dyldo_t *dy, const char *symbol)
+ptr32or64_t *hotpatch_read_symbol(hotpatch_t *hp, const char *symbol)
 {
 	ptr32or64_t *ptr = NULL;
-	if (!dy || !symbol) {
+	if (!hp || !symbol) {
 		return NULL;
 	}
-	exe_get_symboltable(dy);
+	exe_get_symboltable(hp);
 	return ptr;
 }
 
-int dyldo_insert(dyldo_t *dy, const char *dll, const char *symbol,
+int hotpatch_insert(hotpatch_t *hp, const char *dll, const char *symbol,
 				void *arg)
 {
-	if (!dy) {
+	if (!hp) {
 		return -1;
 	}
 	return 0;

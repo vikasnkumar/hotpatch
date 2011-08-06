@@ -1,4 +1,4 @@
-### dyldo is a dll injection strategy
+### hotpatch is a dll injection strategy
 ### Copyright (C) 2010-2011  Vikas Naresh Kumar
 ###
 ### This program is free software: you can redistribute it and/or modify
@@ -13,8 +13,8 @@
 ###
 ### You should have received a copy of the GNU General Public License
 ### along with this program.  If not, see <http://www.gnu.org/licenses/>.
-project(dyldo)
+project(hotpatch)
 
 add_definitions(-D_BSD_SOURCE)
-add_library(dyldo SHARED dyldo.c)
-target_link_libraries(dyldo dl elf)
+add_library(hotpatch SHARED hotpatch.c)
+target_link_libraries(hotpatch dl elf)

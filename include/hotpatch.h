@@ -1,5 +1,5 @@
 /*
- *  dyldo is a dll injection strategy.
+ *  hotpatch is a dll injection strategy.
  *  Copyright (C) 2010-2011 Vikas Naresh Kumar
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,10 +14,10 @@
  * You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef __DYLDO_H__
-#define __DYLDO_H__
+#ifndef __HOTPATCH_H__
+#define __HOTPATCH_H__
 
-#include <dyldo_config.h>
+#include <hotpatch_config.h>
 
 typedef union {
 	enum {
@@ -31,24 +31,24 @@ typedef union {
 	} c;
 } ptr32or64_t;
 
-typedef struct dyldo_is_opaque dyldo_t;
+typedef struct hotpatch_is_opaque hotpatch_t;
 
-/* create the dyldo object for the running process whose PID is given as an
+/* create the hotpatch object for the running process whose PID is given as an
  * argument. Returns a pointer to an opaque object that must be freed by
- * dyldo_delete() function later to conserve memory.
+ * hotpatch_delete() function later to conserve memory.
  */
-dyldo_t *dyldo_create(pid_t);
-/* delete memory and close all open handles related to the dyldo'ed process.
- * This can lead to the dyldo'ed process to be unstable if not done in the same
+hotpatch_t *hotpatch_create(pid_t);
+/* delete memory and close all open handles related to the hotpatch'ed process.
+ * This can lead to the hotpatch'ed process to be unstable if not done in the same
  * thread as create function above.
  */
-void dyldo_destroy(dyldo_t *dyldo);
+void hotpatch_destroy(hotpatch_t *hotpatch);
 /* finds the symbol in the symbol table of executable and returns the memory
  * location of it. On a 64-bit system the running process can be 32 or 64 bit,
  * and hence they both need to be handled correctly or even simultaneously.
  */
-ptr32or64_t *dyldo_read_symbol(dyldo_t *, const char *symbol);
+ptr32or64_t *hotpatch_read_symbol(hotpatch_t *, const char *symbol);
 
-int dyldo_insert(dyldo_t *dyldo, const char *dll, const char *symbol, void *arg);
+int hotpatch_insert(hotpatch_t *hotpatch, const char *dll, const char *symbol, void *arg);
 
-#endif /* __DYLDO_H__ */
+#endif /* __HOTPATCH_H__ */

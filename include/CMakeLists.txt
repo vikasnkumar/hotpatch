@@ -1,4 +1,4 @@
-### dyldo is a dll injection strategy for the Mac.
+### hotpatch is a dll injection strategy for the Mac.
 ### Copyright (C) 2010-2011  Vikas Naresh Kumar
 ###
 ### This program is free software: you can redistribute it and/or modify
@@ -13,4 +13,4 @@
 ###
 ### You should have received a copy of the GNU General Public License
 ### along with this program.  If not, see <http://www.gnu.org/licenses/>.
-configure_file(config.h.in ${CMAKE_CURRENT_BINARY_DIR}/dyldo_config.h @ONLY)
+configure_file(config.h.in ${CMAKE_CURRENT_BINARY_DIR}/hotpatch_config.h @ONLY)

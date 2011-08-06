@@ -1,5 +1,5 @@
 /*
- *  dyldo is a dll injection strategy.
+ *  hotpatch is a dll injection strategy.
  *  Copyright (C) 2010-2011 Vikas Naresh Kumar
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,129 +14,129 @@
  * You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef __DYLDO_CONFIG_H__
-#define __DYLDO_CONFIG_H__
+#ifndef __HOTPATCH_CONFIG_H__
+#define __HOTPATCH_CONFIG_H__
 
-#cmakedefine DYLDO_HAS_ERRNO_H
-#ifdef DYLDO_HAS_ERRNO_H
+#cmakedefine HOTPATCH_HAS_ERRNO_H
+#ifdef HOTPATCH_HAS_ERRNO_H
 	#include <errno.h>
 #endif
 
-#cmakedefine DYLDO_HAS_STDIO_H
-#ifdef DYLDO_HAS_STDIO_H
+#cmakedefine HOTPATCH_HAS_STDIO_H
+#ifdef HOTPATCH_HAS_STDIO_H
 	#include <stdio.h>
 #endif
 
-#cmakedefine DYLDO_HAS_STDLIB_H
-#ifdef DYLDO_HAS_STDLIB_H
+#cmakedefine HOTPATCH_HAS_STDLIB_H
+#ifdef HOTPATCH_HAS_STDLIB_H
 	#include <stdlib.h>
 #endif
 
-#cmakedefine DYLDO_HAS_STRING_H
-#ifdef DYLDO_HAS_STRING_H
+#cmakedefine HOTPATCH_HAS_STRING_H
+#ifdef HOTPATCH_HAS_STRING_H
 	#include <string.h>
 #endif
 
-#cmakedefine DYLDO_HAS_STDINT_H
-#ifdef DYLDO_HAS_STDINT_H
+#cmakedefine HOTPATCH_HAS_STDINT_H
+#ifdef HOTPATCH_HAS_STDINT_H
 	#include <stdint.h>
 #endif
 
-#cmakedefine DYLDO_HAS_STDDEF_H
-#ifdef DYLDO_HAS_STDDEF_H
+#cmakedefine HOTPATCH_HAS_STDDEF_H
+#ifdef HOTPATCH_HAS_STDDEF_H
 	#include <stddef.h>
 #endif
 
-#cmakedefine DYLDO_HAS_STDARG_H
-#ifdef DYLDO_HAS_STDARG_H
+#cmakedefine HOTPATCH_HAS_STDARG_H
+#ifdef HOTPATCH_HAS_STDARG_H
 	#include <stdarg.h>
 #endif
 
-#cmakedefine DYLDO_HAS_TIME_H
-#ifdef DYLDO_HAS_TIME_H
+#cmakedefine HOTPATCH_HAS_TIME_H
+#ifdef HOTPATCH_HAS_TIME_H
 	#include <time.h>
 #endif
 
-#cmakedefine DYLDO_HAS_SYS_TYPES_H
-#ifdef DYLDO_HAS_SYS_TYPES_H
+#cmakedefine HOTPATCH_HAS_SYS_TYPES_H
+#ifdef HOTPATCH_HAS_SYS_TYPES_H
 	#include <sys/types.h>
 #endif
 
-#cmakedefine DYLDO_HAS_UNISTD_H
-#ifdef DYLDO_HAS_UNISTD_H
+#cmakedefine HOTPATCH_HAS_UNISTD_H
+#ifdef HOTPATCH_HAS_UNISTD_H
 	#include <unistd.h>
 #endif
 
-#cmakedefine DYLDO_HAS_ASSERT_H
+#cmakedefine HOTPATCH_HAS_ASSERT_H
 
 /* for the APPLE */
-#cmakedefine DYLDO_HAS_MACH_MESSAGE_H
-#cmakedefine DYLDO_HAS_MACH_MACH_H
-#cmakedefine DYLDO_HAS_MACH_TASK_H
-#cmakedefine DYLDO_HAS_MACH_MACHTRAPS_H
-#cmakedefine DYLDO_HAS_MACH_MACHERROR_H
-#cmakedefine DYLDO_HAS_MACH_TASKFORPID_FN
+#cmakedefine HOTPATCH_HAS_MACH_MESSAGE_H
+#cmakedefine HOTPATCH_HAS_MACH_MACH_H
+#cmakedefine HOTPATCH_HAS_MACH_TASK_H
+#cmakedefine HOTPATCH_HAS_MACH_MACHTRAPS_H
+#cmakedefine HOTPATCH_HAS_MACH_MACHERROR_H
+#cmakedefine HOTPATCH_HAS_MACH_TASKFORPID_FN
 
 /* for the Linux */
-#cmakedefine DYLDO_HAS_LINUX_ELF_H
-#ifdef DYLDO_HAS_LINUX_ELF_H
+#cmakedefine HOTPATCH_HAS_LINUX_ELF_H
+#ifdef HOTPATCH_HAS_LINUX_ELF_H
 	#include <elf.h>
 #endif
 
-#cmakedefine DYLDO_HAS_LINUX_DLFCN_H
-#ifdef DYLDO_HAS_LINUX_DLFCN_H
+#cmakedefine HOTPATCH_HAS_LINUX_DLFCN_H
+#ifdef HOTPATCH_HAS_LINUX_DLFCN_H
 	#include <dlfcn.h>
 #endif
 
-#cmakedefine DYLDO_HAS_LINUX_LINK_H
-#ifdef DYLDO_HAS_LINUX_LINK_H
+#cmakedefine HOTPATCH_HAS_LINUX_LINK_H
+#ifdef HOTPATCH_HAS_LINUX_LINK_H
 	#include <link.h>
 #endif
 
-#cmakedefine DYLDO_HAS_LINUX_PTHREAD_H
-#ifdef DYLDO_HAS_LINUX_PTHREAD_H
+#cmakedefine HOTPATCH_HAS_LINUX_PTHREAD_H
+#ifdef HOTPATCH_HAS_LINUX_PTHREAD_H
 	#include <pthread.h>
 #endif
 
-#cmakedefine DYLDO_HAS_LINUX_SETJMP_H
-#ifdef DYLDO_HAS_LINUX_SETJMP_H
+#cmakedefine HOTPATCH_HAS_LINUX_SETJMP_H
+#ifdef HOTPATCH_HAS_LINUX_SETJMP_H
 	#include <setjmp.h>
 #endif
 
-#cmakedefine DYLDO_HAS_LINUX_SIGNAL_H
-#ifdef DYLDO_HAS_LINUX_SIGNAL_H
+#cmakedefine HOTPATCH_HAS_LINUX_SIGNAL_H
+#ifdef HOTPATCH_HAS_LINUX_SIGNAL_H
 	#include <signal.h>
 #endif
 
-#cmakedefine DYLDO_HAS_LINUX_SYS_PTRACE_H
-#ifdef DYLDO_HAS_LINUX_SYS_PTRACE_H
+#cmakedefine HOTPATCH_HAS_LINUX_SYS_PTRACE_H
+#ifdef HOTPATCH_HAS_LINUX_SYS_PTRACE_H
 	#include <sys/ptrace.h>
 #endif
 
-#cmakedefine DYLDO_HAS_LINUX_SYS_WAIT_H
-#ifdef DYLDO_HAS_LINUX_SYS_WAIT_H
+#cmakedefine HOTPATCH_HAS_LINUX_SYS_WAIT_H
+#ifdef HOTPATCH_HAS_LINUX_SYS_WAIT_H
 	#include <sys/wait.h>
 #endif
 
-#cmakedefine DYLDO_HAS_LINUX_SYS_STAT_H
-#ifdef DYLDO_HAS_LINUX_SYS_STAT_H
+#cmakedefine HOTPATCH_HAS_LINUX_SYS_STAT_H
+#ifdef HOTPATCH_HAS_LINUX_SYS_STAT_H
 	#include <sys/stat.h>
 #endif
 
-#cmakedefine DYLDO_HAS_LINUX_FCNTL_H
-#ifdef DYLDO_HAS_LINUX_FCNTL_H
+#cmakedefine HOTPATCH_HAS_LINUX_FCNTL_H
+#ifdef HOTPATCH_HAS_LINUX_FCNTL_H
 	#include <fcntl.h>
 #endif
 
-#cmakedefine DYLDO_HAS_LINUX_SYS_USER_H
-#ifdef DYLDO_HAS_LINUX_SYS_USER_H
+#cmakedefine HOTPATCH_HAS_LINUX_SYS_USER_H
+#ifdef HOTPATCH_HAS_LINUX_SYS_USER_H
 	#include <sys/types.h>
 	#include <sys/user.h>
 #endif
 
-#cmakedefine DYLDO_HAS_LINUX_DLITERPHDR_FN
+#cmakedefine HOTPATCH_HAS_LINUX_DLITERPHDR_FN
 
-#define DYLDO_VOIDPTR_SIZE @DYLDO_VOIDPTR_SIZE@
+#define HOTPATCH_VOIDPTR_SIZE @HOTPATCH_VOIDPTR_SIZE@
 
-#endif /* __DYLDO_CONFIG_H__ */
+#endif /* __HOTPATCH_CONFIG_H__ */
 

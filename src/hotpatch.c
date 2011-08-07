@@ -64,6 +64,8 @@ struct hotpatch_is_opaque {
 	size_t sechdr_num;
 	size_t sechdr_size; /* total buffer size */
 	size_t secnametbl_idx;
+	char *strtbl; /* string table for section names */
+	size_t strtbl_size;
 	char *exepath;
 	int inserted;
 };
@@ -105,20 +107,20 @@ static int exe_elf_identify(unsigned char *e_ident, size_t size, int verbose)
 			switch (e_ident[EI_CLASS]) {
 			case ELFCLASS32:
 				is64 = HOTPATCH_EXE_IS_32BIT;
-				if (verbose > 4)
+				if (verbose > 3)
 					fprintf(stderr, "[%s:%d] File is 32-bit ELF\n", __func__,
 							__LINE__);
 				break;
 			case ELFCLASS64:
 				is64 = HOTPATCH_EXE_IS_64BIT;
-				if (verbose > 4)
+				if (verbose > 3)
 					fprintf(stderr, "[%s:%d] File is 64-bit ELF\n", __func__,
 							__LINE__);
 				break;
 			case ELFCLASSNONE:
 			default:
 				is64 = HOTPATCH_EXE_IS_NEITHER;
-				if (verbose > 4)
+				if (verbose > 3)
 					fprintf(stderr, "[%s:%d] File is unsupported ELF\n",
 							__func__, __LINE__);
 				break;
@@ -150,14 +152,18 @@ static int exe_elf_identify(unsigned char *e_ident, size_t size, int verbose)
 				}
 				if (e_ident[EI_VERSION] == EV_CURRENT) {
 					iscurrent = 1;
-					if (verbose > 4)
+					if (verbose > 3)
 						fprintf(stderr, "[%s:%d] Current ELF format.\n",
 								__func__, __LINE__);
 				}
-				if (e_ident[EI_OSABI] == ELFOSABI_LINUX) {
+				if (verbose > 3)
+					fprintf(stderr, "[%s:%d] ELFOSABI: %d\n", __func__,
+							__LINE__, e_ident[EI_OSABI]);
+				if (e_ident[EI_OSABI] == ELFOSABI_LINUX ||
+					e_ident[EI_OSABI] == ELFOSABI_SYSV) {
 					islinux = 1;
-					if (verbose > 4)
-						fprintf(stderr, "[%s:%d] OS ABIis Linux .\n", __func__,
+					if (verbose > 3)
+						fprintf(stderr, "[%s:%d] OS ABI is Linux.\n", __func__,
 								__LINE__);
 				}
 				if (islinux && isbigendian == 0 && iscurrent) {
@@ -178,9 +184,13 @@ static int exe_elf_identify(unsigned char *e_ident, size_t size, int verbose)
 
 static int exe_load_section_headers(hotpatch_t *hp)
 {
+	Elf64_Shdr *strtblhdr = NULL;
+	Elf64_Shdr *sechdrs = NULL;
+	size_t idx = 0;
+
 	if (!hp || hp->sechdr_offset == 0 || hp->sechdr_size == 0)
 		return -1;
-	if (hp->verbose > 4)
+	if (hp->verbose > 3)
 		fprintf(stderr, "[%s:%d] Retrieving section headers.\n", __func__,
 				__LINE__);
 	hp->sechdrs = malloc(hp->sechdr_size);
@@ -200,22 +210,37 @@ static int exe_load_section_headers(hotpatch_t *hp)
 		LOG_ERROR_FILE_READ;
 		return -1;
 	}
-	if (hp->is64 == HOTPATCH_EXE_IS_64BIT) {
-		Elf64_Shdr *strtblhdr = NULL;
-		Elf64_Shdr *sechdrs = (Elf64_Shdr *)hp->sechdrs;
-		strtblhdr = &sechdrs[hp->secnametbl_idx];
-		if (lseek(hp->fd_exe, strtblhdr->sh_offset, SEEK_SET) < 0) {
-			LOG_ERROR_FILE_SEEK;
-			return -1;
-		}
-
-
+	sechdrs = (Elf64_Shdr *)hp->sechdrs;
+	strtblhdr = &sechdrs[hp->secnametbl_idx];
+	if (lseek(hp->fd_exe, strtblhdr->sh_offset, SEEK_SET) < 0) {
+		LOG_ERROR_FILE_SEEK;
+		return -1;
 	}
-	/* copy section string table over.
-	// read section names in
-	// check for symbol tables and string tables
-	// copy the string tables in
-	*/
+	hp->strtbl = malloc(strtblhdr->sh_size);
+	if (!hp->strtbl) {
+		LOG_ERROR_OUT_OF_MEMORY;
+		return -1;
+	}
+	hp->strtbl_size = strtblhdr->sh_size + 0;
+	if (read(hp->fd_exe, hp->strtbl, strtblhdr->sh_size) < 0) {
+		LOG_ERROR_FILE_READ;
+		return -1;
+	}
+	if (hp->verbose > 3)
+		fprintf(stderr, "[%s:%d] Number of sections: %ld\n", __func__, __LINE__,
+				hp->sechdr_num);
+	for (idx = 0; idx < hp->sechdr_num; ++idx) {
+		const char *name = &hp->strtbl[sechdrs[idx].sh_name];
+		if (name) {
+			fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: %ld\n",
+					__func__, __LINE__, name, (void *)sechdrs[idx].sh_addr,
+					sechdrs[idx].sh_size);
+		} else {
+			fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: %ld\n",
+					__func__, __LINE__, "N/A", (void *)sechdrs[idx].sh_addr,
+					sechdrs[idx].sh_size);
+		}
+	}
 	return 0;
 }
 
@@ -262,7 +287,7 @@ static int exe_load_headers(hotpatch_t *hp)
 	hp->is64 = exe_elf_identify(hdr.e_ident, EI_NIDENT, hp->verbose);
 	switch (hp->is64) {
 	case HOTPATCH_EXE_IS_64BIT:
-		if (hp->verbose > 4)
+		if (hp->verbose > 3)
 			fprintf(stderr, "[%s:%d] 64-bit valid exe\n", __func__, __LINE__);
 		if (hdr.e_machine != EM_X86_64) {
 			LOG_ERROR_UNSUPPORTED_PROCESSOR;
@@ -349,6 +374,11 @@ void hotpatch_destroy(hotpatch_t *hp)
 		if (hp->fd_exe > 0) {
 			close(hp->fd_exe);
 			hp->fd_exe = -1;
+		}
+		hp->strtbl_size = 0;
+		if (hp->strtbl) {
+			free(hp->strtbl);
+			hp->strtbl = NULL;
 		}
 		if (hp->sechdrs) {
 			free(hp->sechdrs);

@@ -24,7 +24,10 @@ struct hp_options {
 
 void print_usage(const char *app)
 {
-    printf("Usage: %s [options] <PID of process to patch>\n", app);
+    printf("\nUsage: %s [options] <PID of process to patch>\n", app);
+	printf("\nOptions:\n");
+	printf("-h           This help message.\n");
+	printf("-v[vvvv]     Enable verbose logging. Add more 'v's for more\n");
 }
 
 void print_options(const struct hp_options *opts)
@@ -83,5 +86,12 @@ int main(int argc, char **argv)
     }
     print_options(&opts);
 	hp = hotpatch_create(opts.pid, opts.verbose);
+	if (!hp) {
+		fprintf(stderr, "[%s:%d] Unable to create hotpatch for PID %d\n",
+				__func__, __LINE__, opts.pid);
+		return -1;
+	}
+	hotpatch_destroy(hp);
+	hp = NULL;
     return 0;
 }

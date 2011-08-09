@@ -1,0 +1,31 @@
+RUNTIME MODIFICATION OF RUNNING SOFTWARE APPLICATIONS USING DYNAMIC LIBRARY INJECTION BY ANOTHER PROCESS
+================================================================================================
+Many software applications, that are not mission critical, are not built with mechanisms to update their software
+without having to stop running the application and restarting it. Applications might also be in a state where updating
+them might not be possible because of unavailability of the application creators themselves. The users of such
+applications might want to modify the applications so that they can maximize usefulness of said applications. Cases
+might also arise where the user wants to be able to instrument parts of an application while in execution without having
+to recompile the application and be able to reproduce bugs in the application that are non-deterministic.
+A method to address all the above issues by modification of an application that is running in a process on an operating
+system in a computer, called the host process, by another process without restarting the host process is described here.
+
+------
+Host process is running.
+Server process starts or is in running state, attaches itself to the host process via operating system primitives like a
+debugger, locates the runtime symbol table as described in the custom executable file format such as in the PE format on
+Windows and the ELF format on GNU/Linux. the server process first creates a thread in the host application and detaches
+itself. the thread that is now created in the host process is now part of the host process. this thread first retrieves
+the address of the executable pointer or the shared library pointer that it plans to modify, and then finds all
+references to those pointers except in itself.
+
+It then goes forward and modifies the symbol table in all libraries to replace the given function names by the user to
+the new function names. this way after these changes have been made, the new functions get called instead of the old
+functions. This enables the host process to update itself but without having to have the updating logic within itself.
+The client process can be generic enough and can be used to update all the running processes thus avoiding programming
+updating logic into each process.
+
+Another usage would be where users might want to invoke their functions before the host applications functions to
+instrument the host application while trying to either monitor performance, profile the application or even check memory
+leaks.
+
+Needs to be done for Linux.

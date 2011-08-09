@@ -9,7 +9,7 @@ int main()
 		struct timeval tv = { 0 };
 		sleep(2);
 		gettimeofday(&tv, NULL);
-		printf("Working %d.%d\n", tv.tv_sec, tv.tv_usec);		
+		printf("Working %ld.%ld\n", tv.tv_sec, tv.tv_usec);
 	}
 	return 0;
 }

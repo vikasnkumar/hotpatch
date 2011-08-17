@@ -64,8 +64,10 @@ struct hotpatch_is_opaque {
 	size_t sechdr_num;
 	size_t sechdr_size; /* total buffer size */
 	size_t secnametbl_idx;
-	char *strtbl; /* string table for section names */
-	size_t strtbl_size;
+	char *strsectbl; /* string table for section names */
+	size_t strsectbl_size;
+	char *strsymtbl; /* string table for symbol names */
+	size_t strsymtbl_size;
 	char *exepath;
 	int inserted;
 };
@@ -182,11 +184,63 @@ static int exe_elf_identify(unsigned char *e_ident, size_t size, int verbose)
 	return HOTPATCH_EXE_IS_NEITHER;
 }
 
+static int exe_load_symbol_table(hotpatch_t *hp, Elf64_Shdr *symh,
+								 Elf64_Shdr *strh)
+{
+	while (hp && symh && strh) {
+		if (hp->verbose > 3)
+			fprintf(stderr, "[%s:%d] Retrieving symbol table.\n", __func__,
+					__LINE__);
+		if (lseek(hp->fd_exe, strh->sh_offset, SEEK_SET) < 0) {
+			LOG_ERROR_FILE_SEEK;
+			break;
+		}
+		hp->strsymtbl_size = strh->sh_size + 0;
+		hp->strsymtbl = malloc(strh->sh_size);
+		if (!hp->strsymtbl) {
+			LOG_ERROR_OUT_OF_MEMORY;
+			break;
+		}
+		if (read(hp->fd_exe, hp->strsymtbl, strh->sh_size) < 0) {
+			LOG_ERROR_FILE_READ;
+			break;
+		}
+		if (symh->sh_entsize > 0 && symh->sh_size > 0) {
+			size_t idx;
+			size_t sym_num = symh->sh_size / symh->sh_entsize;
+			Elf64_Sym *syms = malloc(symh->sh_size);
+			if (!syms) {
+				LOG_ERROR_OUT_OF_MEMORY;
+				break;
+			}
+			if (lseek(hp->fd_exe, symh->sh_offset, SEEK_SET) < 0) {
+				LOG_ERROR_FILE_SEEK;
+				break;
+			}
+			if (read(hp->fd_exe, syms, symh->sh_size) < 0) {
+				LOG_ERROR_FILE_READ;
+				break;
+			}
+			for (idx = 0; idx < sym_num; ++idx) {
+				const char *name = syms[idx].st_name > 0 ?
+					&hp->strsymtbl[syms[idx].st_name] : NULL;
+				if (name)
+					fprintf(stderr, "[%s:%d] Symbol %ld is %s\n", __func__,
+							__LINE__, idx, name);
+			}
+			return 0;
+		}
+	}
+	return -1;
+}
+
 static int exe_load_section_headers(hotpatch_t *hp)
 {
-	Elf64_Shdr *strtblhdr = NULL;
+	Elf64_Shdr *strsectblhdr = NULL;
 	Elf64_Shdr *sechdrs = NULL;
 	size_t idx = 0;
+	ssize_t symtab = -1;
+	ssize_t strtab = -1;
 
 	if (!hp || hp->sechdr_offset == 0 || hp->sechdr_size == 0)
 		return -1;
@@ -211,18 +265,18 @@ static int exe_load_section_headers(hotpatch_t *hp)
 		return -1;
 	}
 	sechdrs = (Elf64_Shdr *)hp->sechdrs;
-	strtblhdr = &sechdrs[hp->secnametbl_idx];
-	if (lseek(hp->fd_exe, strtblhdr->sh_offset, SEEK_SET) < 0) {
+	strsectblhdr = &sechdrs[hp->secnametbl_idx];
+	if (lseek(hp->fd_exe, strsectblhdr->sh_offset, SEEK_SET) < 0) {
 		LOG_ERROR_FILE_SEEK;
 		return -1;
 	}
-	hp->strtbl = malloc(strtblhdr->sh_size);
-	if (!hp->strtbl) {
+	hp->strsectbl = malloc(strsectblhdr->sh_size);
+	if (!hp->strsectbl) {
 		LOG_ERROR_OUT_OF_MEMORY;
 		return -1;
 	}
-	hp->strtbl_size = strtblhdr->sh_size + 0;
-	if (read(hp->fd_exe, hp->strtbl, strtblhdr->sh_size) < 0) {
+	hp->strsectbl_size = strsectblhdr->sh_size + 0;
+	if (read(hp->fd_exe, hp->strsectbl, strsectblhdr->sh_size) < 0) {
 		LOG_ERROR_FILE_READ;
 		return -1;
 	}
@@ -230,15 +284,42 @@ static int exe_load_section_headers(hotpatch_t *hp)
 		fprintf(stderr, "[%s:%d] Number of sections: %ld\n", __func__, __LINE__,
 				hp->sechdr_num);
 	for (idx = 0; idx < hp->sechdr_num; ++idx) {
-		const char *name = &hp->strtbl[sechdrs[idx].sh_name];
+		const char *name = &hp->strsectbl[sechdrs[idx].sh_name];
 		if (name) {
 			fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: %ld\n",
-					__func__, __LINE__, name, (void *)sechdrs[idx].sh_addr,
+					__func__, __LINE__, name, (void *)sechdrs[idx].sh_offset,
 					sechdrs[idx].sh_size);
 		} else {
 			fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: %ld\n",
-					__func__, __LINE__, "N/A", (void *)sechdrs[idx].sh_addr,
+					__func__, __LINE__, "N/A", (void *)sechdrs[idx].sh_offset,
 					sechdrs[idx].sh_size);
+		}
+		switch (sechdrs[idx].sh_type) {
+		case SHT_SYMTAB:
+			symtab = idx;
+			if (hp->verbose > 3)
+				fprintf(stderr, "[%s:%d] Symbol table offset: %ld size: %ld "
+						"entsize: %ld entries: %ld\n",
+				__func__, __LINE__, sechdrs[idx].sh_offset,
+				sechdrs[idx].sh_size, sechdrs[idx].sh_entsize,
+				sechdrs[idx].sh_size / sechdrs[idx].sh_entsize);
+			break;
+		case SHT_STRTAB:
+			if (idx != hp->secnametbl_idx) {
+				strtab = idx;
+				if (hp->verbose > 2)
+					fprintf(stderr, "[%s:%d] Reading symbol table from %s\n",
+							__func__, __LINE__, name);
+				//TODO: take care of multiple string tables
+				if (symtab >= 0 && exe_load_symbol_table(hp, &sechdrs[symtab],
+							&sechdrs[strtab]) < 0) {
+					fprintf(stderr, "[%s:%d] Failed to retrieve symbol "
+							"table.\n", __func__, __LINE__);
+				}
+			}
+			break;
+		default:
+			break;
 		}
 	}
 	return 0;
@@ -246,6 +327,8 @@ static int exe_load_section_headers(hotpatch_t *hp)
 
 static int exe_load_program_headers(hotpatch_t *hp)
 {
+	Elf64_Phdr *proghdrs = NULL;
+	size_t idx = 0;
 	if (!hp || hp->proghdr_offset == 0 || hp->proghdr_size == 0)
 		return -1;
 	hp->proghdrs = malloc(hp->proghdr_size);
@@ -261,6 +344,16 @@ static int exe_load_program_headers(hotpatch_t *hp)
 	if (read(hp->fd_exe, hp->proghdrs, hp->proghdr_size) < 0) {
 		LOG_ERROR_FILE_READ;
 		return -1;
+	}
+	if (hp->verbose > 3)
+		fprintf(stderr, "[%s:%d] Number of segments: %ld\n", __func__, __LINE__,
+				hp->proghdr_num);
+	proghdrs = (Elf64_Phdr *)hp->proghdrs;
+	for (idx = 0; idx < hp->proghdr_num; ++idx) {
+		fprintf(stderr,
+				"[%s:%d] Prog-header %ld: Type: %d VAddr: %p FileSz: %ld MemSz: %ld\n",
+				__func__, __LINE__, idx, proghdrs[idx].p_type, (void *)proghdrs[idx].p_vaddr,
+				proghdrs[idx].p_filesz, proghdrs[idx].p_memsz);
 	}
 	return 0;
 }
@@ -375,10 +468,15 @@ void hotpatch_destroy(hotpatch_t *hp)
 			close(hp->fd_exe);
 			hp->fd_exe = -1;
 		}
-		hp->strtbl_size = 0;
-		if (hp->strtbl) {
-			free(hp->strtbl);
-			hp->strtbl = NULL;
+		hp->strsymtbl_size = 0;
+		if (hp->strsymtbl) {
+			free(hp->strsymtbl);
+			hp->strsymtbl = NULL;
+		}
+		hp->strsectbl_size = 0;
+		if (hp->strsectbl) {
+			free(hp->strsectbl);
+			hp->strsectbl = NULL;
 		}
 		if (hp->sechdrs) {
 			free(hp->sechdrs);

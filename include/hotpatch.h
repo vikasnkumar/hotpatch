@@ -26,18 +26,6 @@ extern "C" {
 #define HOTPATCH_MAJOR_VERSION 0
 #define HOTPATCH_MINOR_VERSION 1
 
-typedef union {
-	enum {
-		PTR_IS_32BIT,
-		PTR_IS_64BIT
-	} type;
-	union u_ptr32or64_t {
-		void *pv;
-		uint32_t *p32;
-		uint64_t *p64;
-	} c;
-} ptr32or64_t;
-
 typedef struct hotpatch_is_opaque hotpatch_t;
 
 /* Create the hotpatch object for the running process whose PID is given as an
@@ -55,7 +43,7 @@ void hotpatch_destroy(hotpatch_t *hotpatch);
  * location of it. On a 64-bit system the running process can be 32 or 64 bit,
  * and hence they both need to be handled correctly or even simultaneously.
  */
-ptr32or64_t *hotpatch_read_symbol(hotpatch_t *, const char *symbol);
+void *hotpatch_read_symbol(hotpatch_t *, const char *symbol);
 
 int hotpatch_insert(hotpatch_t *hotpatch, const char *dll, const char *symbol, void *arg);
 

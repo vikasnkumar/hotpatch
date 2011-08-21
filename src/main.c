@@ -80,6 +80,7 @@ int main(int argc, char **argv)
 {
     struct hp_options opts = { 0 };
     hotpatch_t *hp = NULL;
+	void *ptr = NULL;
     /* parse all arguments first */
     if (parse_arguments(argc, argv, &opts) < 0) {
         return -1;
@@ -91,6 +92,8 @@ int main(int argc, char **argv)
 				__func__, __LINE__, opts.pid);
 		return -1;
 	}
+	ptr = hotpatch_read_symbol(hp, "main");
+	printf("Symbol %s found at %p\n", "main", ptr);
 	hotpatch_destroy(hp);
 	hp = NULL;
     return 0;

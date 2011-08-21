@@ -69,6 +69,11 @@ struct hotpatch_is_opaque {
 	char *strsymtbl; /* string table for symbol names */
 	size_t strsymtbl_size;
 	char *exepath;
+	struct hotpatch_symbol {
+		char *name; /* null terminated symbol name */
+		void *address; /* address at which it is available */
+	} *symbols;
+	size_t symbols_num;
 	int inserted;
 };
 
@@ -215,19 +220,35 @@ static int exe_load_symbol_table(hotpatch_t *hp, Elf64_Shdr *symh,
 			}
 			if (lseek(hp->fd_exe, symh->sh_offset, SEEK_SET) < 0) {
 				LOG_ERROR_FILE_SEEK;
+				free(syms);
 				break;
 			}
 			if (read(hp->fd_exe, syms, symh->sh_size) < 0) {
 				LOG_ERROR_FILE_READ;
+				free(syms);
 				break;
+			}
+			hp->symbols_num = 0;
+			hp->symbols = malloc(sym_num * sizeof(*hp->symbols));
+			if (!hp->symbols) {
+				LOG_ERROR_OUT_OF_MEMORY;
+			} else {
+				memset(hp->symbols, 0, sizeof(*hp->symbols) * sym_num);
 			}
 			for (idx = 0; idx < sym_num; ++idx) {
 				const char *name = syms[idx].st_name > 0 ?
 					&hp->strsymtbl[syms[idx].st_name] : NULL;
-				if (name)
-					fprintf(stderr, "[%s:%d] Symbol %ld is %s\n", __func__,
-							__LINE__, idx, name);
+				if (name) {
+					if (hp->verbose > 1)
+						fprintf(stderr, "[%s:%d] Symbol %ld is %s at %p\n",
+							__func__, __LINE__, idx, name,
+							(void *)syms[idx].st_value);
+					hp->symbols[hp->symbols_num].name = strdup(name);
+					hp->symbols[hp->symbols_num].address = (void *)syms[idx].st_value;
+					hp->symbols_num++;
+				}
 			}
+			free(syms);
 			return 0;
 		}
 	}
@@ -310,7 +331,7 @@ static int exe_load_section_headers(hotpatch_t *hp)
 				if (hp->verbose > 2)
 					fprintf(stderr, "[%s:%d] Reading symbol table from %s\n",
 							__func__, __LINE__, name);
-				//TODO: take care of multiple string tables
+				/*TODO: take care of multiple string tables*/
 				if (symtab >= 0 && exe_load_symbol_table(hp, &sechdrs[symtab],
 							&sechdrs[strtab]) < 0) {
 					fprintf(stderr, "[%s:%d] Failed to retrieve symbol "
@@ -382,6 +403,8 @@ static int exe_load_headers(hotpatch_t *hp)
 	case HOTPATCH_EXE_IS_64BIT:
 		if (hp->verbose > 3)
 			fprintf(stderr, "[%s:%d] 64-bit valid exe\n", __func__, __LINE__);
+		fprintf(stderr, "[%s:%d] Entry point %p\n", __func__, __LINE__,
+				(void *)hdr.e_entry);
 		if (hdr.e_machine != EM_X86_64) {
 			LOG_ERROR_UNSUPPORTED_PROCESSOR;
 			return -1;
@@ -404,31 +427,13 @@ static int exe_load_headers(hotpatch_t *hp)
 		return -1;
 	}
 	if (exe_load_section_headers(hp) < 0) {
-
-	}
-	if (exe_load_program_headers(hp) < 0) {
-
-	}
-	return 0;
-}
-
-static int exe_get_symboltable(hotpatch_t *hp)
-{
-	Elf64_Shdr *shdr = NULL;
-	if (!hp || !hp->sechdrs) {
+		fprintf(stderr, "[%s:%d] Error in loading section headers\n",
+				__func__, __LINE__);
 		return -1;
 	}
-	switch(hp->is64) {
-	size_t idx = 0;
-	case HOTPATCH_EXE_IS_64BIT:
-		shdr = (Elf64_Shdr *)hp->sechdrs;
-		for (idx = 0; idx < hp->sechdr_num; ++idx) {
-
-		}
-		break;
-	case HOTPATCH_EXE_IS_32BIT:
-	case HOTPATCH_EXE_IS_NEITHER:
-	default:
+	if (exe_load_program_headers(hp) < 0) {
+		fprintf(stderr, "[%s:%d] Error in loading section headers\n",
+				__func__, __LINE__);
 		return -1;
 	}
 	return 0;
@@ -468,6 +473,16 @@ void hotpatch_destroy(hotpatch_t *hp)
 			close(hp->fd_exe);
 			hp->fd_exe = -1;
 		}
+		if (hp->symbols) {
+			size_t idx;
+			for (idx = 0; idx < hp->symbols_num; ++idx) {
+				free(hp->symbols[idx].name);
+				hp->symbols[idx].name = NULL;
+			}
+			free(hp->symbols);
+		}
+		hp->symbols = NULL;
+		hp->symbols_num = 0;
 		hp->strsymtbl_size = 0;
 		if (hp->strsymtbl) {
 			free(hp->strsymtbl);
@@ -491,13 +506,28 @@ void hotpatch_destroy(hotpatch_t *hp)
 	}
 }
 
-ptr32or64_t *hotpatch_read_symbol(hotpatch_t *hp, const char *symbol)
+void *hotpatch_read_symbol(hotpatch_t *hp, const char *symbol)
 {
-	ptr32or64_t *ptr = NULL;
-	if (!hp || !symbol) {
+	void *ptr = NULL;
+	size_t idx = 0;
+	if (!hp || !symbol || !hp->symbols) {
+		if (hp->verbose > 2)
+			fprintf(stderr, "[%s:%d] Invalid arguments.\n", __func__, __LINE__);
 		return NULL;
 	}
-	exe_get_symboltable(hp);
+	for (idx = 0; idx < hp->symbols_num; ++idx) {
+		const char *name = hp->symbols[idx].name;
+		if (strcmp(name, symbol) == 0) {
+			if (hp->verbose > 1)
+				fprintf(stderr, "[%s:%d] Found %s in symbol list at %ld\n",
+						__func__, __LINE__, symbol, idx);
+			ptr = hp->symbols[idx].address;
+			break;
+		}
+	}
+	if (hp->verbose > 2)
+		fprintf(stderr, "[%s:%d] Symbol %s has address %p\n", __func__,
+				__LINE__, symbol, ptr);
 	return ptr;
 }
 

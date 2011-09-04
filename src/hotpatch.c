@@ -23,23 +23,28 @@
 } while (0)
 #define LOG_ERROR_OUT_OF_MEMORY do { \
 	int err = errno; \
-	fprintf(stderr, "[%s:%d] Out of memory. Error: %s\n", __func__, __LINE__, strerror(err)); \
+	fprintf(stderr, "[%s:%d] Out of memory. Error: %s\n", __func__, __LINE__,\
+			strerror(err)); \
 } while (0)
 #define LOG_ERROR_FILE_OPEN(FF) do { \
 	int err = errno; \
-	fprintf(stderr, "[%s:%d] File(%s) open error. Error: %s\n", __func__, __LINE__, FF, strerror(err)); \
+	fprintf(stderr, "[%s:%d] File(%s) open error. Error: %s\n", __func__, __LINE__,\
+			FF, strerror(err)); \
 } while (0)
 #define LOG_ERROR_FILE_SEEK do { \
 	int err = errno; \
-	fprintf(stderr, "[%s:%d] File seek error. Error: %s\n", __func__, __LINE__, strerror(err)); \
+	fprintf(stderr, "[%s:%d] File seek error. Error: %s\n", __func__, __LINE__,\
+			strerror(err)); \
 } while (0)
 #define LOG_ERROR_FILE_READ do { \
 	int err = errno; \
-	fprintf(stderr, "[%s:%d] File read error. Error: %s\n", __func__, __LINE__, strerror(err)); \
+	fprintf(stderr, "[%s:%d] File read error. Error: %s\n", __func__, __LINE__,\
+			strerror(err)); \
 } while (0)
 #define LOG_ERROR_UNSUPPORTED_PROCESSOR do { \
 	fprintf(stderr, \
-	"[%s:%d] Only 32/64-bit Intel X86/X86-64 processors are supported.\n", __func__, __LINE__); \
+			"[%s:%d] Only 32/64-bit Intel X86/X86-64 processors are supported.\n",\
+			__func__, __LINE__); \
 } while (0)
 #define LOG_INFO_HEADERS_LOADED(verbose) do { \
 	if (verbose > 2) \
@@ -71,11 +76,34 @@ struct hotpatch_is_opaque {
 	char *exepath;
 	struct hotpatch_symbol {
 		char *name; /* null terminated symbol name */
-		void *address; /* address at which it is available */
+		uintptr_t address; /* address at which it is available */
+		int type; /* type of symbol */
+		size_t size; /* size of the symbol if available */
 	} *symbols;
 	size_t symbols_num;
 	int inserted;
 };
+
+enum {
+	HOTPATCH_SYMBOL_TYPE,
+	HOTPATCH_UNKNOWN
+};
+
+static int exe_to_hotpatch_type(int info, int group)
+{
+	if (group == HOTPATCH_SYMBOL_TYPE) {
+		int value = ELF64_ST_TYPE(info);
+		if (value == STT_FUNC)
+			return HOTPATCH_SYMBOL_IS_FUNCTION;
+		else if (value == STT_FILE)
+			return HOTPATCH_SYMBOL_IS_FILENAME;
+		else if (value == STT_SECTION)
+			return HOTPATCH_SYMBOL_IS_SECTION;
+		else
+			return HOTPATCH_SYMBOL_IS_UNKNOWN;
+	}
+	return -1;
+}
 
 /* each of the exe_* functions have to be reentrant and thread-safe */
 static int exe_open_file(pid_t pid, int verbose)
@@ -230,21 +258,32 @@ static int exe_load_symbol_table(hotpatch_t *hp, Elf64_Shdr *symh,
 			}
 			hp->symbols_num = 0;
 			hp->symbols = malloc(sym_num * sizeof(*hp->symbols));
-			if (!hp->symbols) {
+			if (!hp->symbols)
 				LOG_ERROR_OUT_OF_MEMORY;
-			} else {
+			else
 				memset(hp->symbols, 0, sizeof(*hp->symbols) * sym_num);
-			}
 			for (idx = 0; idx < sym_num; ++idx) {
 				const char *name = syms[idx].st_name > 0 ?
 					&hp->strsymtbl[syms[idx].st_name] : NULL;
 				if (name) {
+					char *name2;
+					int symtype = exe_to_hotpatch_type(syms[idx].st_info,
+									HOTPATCH_SYMBOL_TYPE);
 					if (hp->verbose > 1)
-						fprintf(stderr, "[%s:%d] Symbol %ld is %s at %p\n",
+						fprintf(stderr,
+							"[%s:%d] Symbol %ld is %s at %p type %d size %ld\n",
 							__func__, __LINE__, idx, name,
-							(void *)syms[idx].st_value);
-					hp->symbols[hp->symbols_num].name = strdup(name);
-					hp->symbols[hp->symbols_num].address = (void *)syms[idx].st_value;
+							(void *)syms[idx].st_value, symtype,
+							syms[idx].st_size);
+					name2 = strdup(name);
+					if (!name2) {
+						LOG_ERROR_OUT_OF_MEMORY;
+						continue;
+					}
+					hp->symbols[hp->symbols_num].name = name2;
+					hp->symbols[hp->symbols_num].address = (uintptr_t)syms[idx].st_value;
+					hp->symbols[hp->symbols_num].size = (size_t)syms[idx].st_size;
+					hp->symbols[hp->symbols_num].type = symtype;
 					hp->symbols_num++;
 				}
 			}
@@ -506,14 +545,14 @@ void hotpatch_destroy(hotpatch_t *hp)
 	}
 }
 
-void *hotpatch_read_symbol(hotpatch_t *hp, const char *symbol)
+uintptr_t hotpatch_read_symbol(hotpatch_t *hp, const char *symbol, int *type, size_t *sz)
 {
-	void *ptr = NULL;
+	uintptr_t ptr = 0;
 	size_t idx = 0;
 	if (!hp || !symbol || !hp->symbols) {
 		if (hp->verbose > 2)
 			fprintf(stderr, "[%s:%d] Invalid arguments.\n", __func__, __LINE__);
-		return NULL;
+		return (uintptr_t)0;
 	}
 	for (idx = 0; idx < hp->symbols_num; ++idx) {
 		const char *name = hp->symbols[idx].name;
@@ -522,11 +561,15 @@ void *hotpatch_read_symbol(hotpatch_t *hp, const char *symbol)
 				fprintf(stderr, "[%s:%d] Found %s in symbol list at %ld\n",
 						__func__, __LINE__, symbol, idx);
 			ptr = hp->symbols[idx].address;
+			if (type)
+				*type = hp->symbols[idx].type;
+			if (sz)
+				*sz = hp->symbols[idx].size;
 			break;
 		}
 	}
 	if (hp->verbose > 2)
-		fprintf(stderr, "[%s:%d] Symbol %s has address %p\n", __func__,
+		fprintf(stderr, "[%s:%d] Symbol %s has address 0x%lx\n", __func__,
 				__LINE__, symbol, ptr);
 	return ptr;
 }
@@ -547,4 +590,18 @@ size_t hotpatch_strnlen(const char *str, size_t maxlen)
     if (str)
         while (len < maxlen && str[len++] != '\0');
     return len;
+}
+
+int hotpatch_attach(hotpatch_t *hp)
+{
+	if (hp) {
+	}
+	return -1;
+}
+
+int hotpatch_detach(hotpatch_t *hp)
+{
+	if (hp)
+		return 0;
+	return -1;
 }

@@ -20,6 +20,7 @@
 struct hp_options {
     pid_t pid;
     int verbose;
+	char *symbol;
 };
 
 void print_usage(const char *app)
@@ -28,6 +29,7 @@ void print_usage(const char *app)
 	printf("\nOptions:\n");
 	printf("-h           This help message.\n");
 	printf("-v[vvvv]     Enable verbose logging. Add more 'v's for more\n");
+	printf("-s <name>    Specify symbol name. Default is _start\n");
 }
 
 void print_options(const struct hp_options *opts)
@@ -36,9 +38,11 @@ void print_options(const struct hp_options *opts)
 		printf(
 				"Options Given:\n"
 				"Verbose Level: %d\n"
-				"Process PID: %d\n",
+				"Process PID: %d\n"
+				"Symbol name: %s\n",
 				opts->verbose,
-				opts->pid
+				opts->pid,
+				opts->symbol
 			  );
 	}
 }
@@ -50,11 +54,18 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
         extern int optind;
         extern char *optarg;
         optind = 1;
-        while ((opt = getopt(argc, argv, "hv::")) != -1) {
+        while ((opt = getopt(argc, argv, "hs:v::")) != -1) {
             switch (opt) {
             case 'v':
                 opts->verbose += optarg ? (int)strnlen(optarg, 5) : 1;
                 break;
+			case 's':
+				opts->symbol = strdup(optarg);
+				if (!opts->symbol) {
+					printf("[%s:%d] Out of memory\n", __func__, __LINE__);
+					return -1;
+				}
+				break;
             case 'h':
             default:
                 print_usage(argv[0]);
@@ -71,6 +82,12 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
             printf("Process PID can't be 0. Tried parsing: %s\n", argv[optind]);
 			return -1;
         }
+		if (!opts->symbol)
+			opts->symbol = strdup("_start");
+		if (!opts->symbol) {
+			printf("[%s:%d] Out of memory\n", __func__, __LINE__);
+			return -1;
+		}
         return 0;
     }
     return -1;
@@ -80,7 +97,7 @@ int main(int argc, char **argv)
 {
     struct hp_options opts = { 0 };
     hotpatch_t *hp = NULL;
-	void *ptr = NULL;
+	uintptr_t ptr = 0;
     /* parse all arguments first */
     if (parse_arguments(argc, argv, &opts) < 0) {
         return -1;
@@ -90,11 +107,16 @@ int main(int argc, char **argv)
 	if (!hp) {
 		fprintf(stderr, "[%s:%d] Unable to create hotpatch for PID %d\n",
 				__func__, __LINE__, opts.pid);
+		free(opts.symbol);
 		return -1;
 	}
-	ptr = hotpatch_read_symbol(hp, "main");
-	printf("Symbol %s found at %p\n", "main", ptr);
+	ptr = hotpatch_read_symbol(hp, opts.symbol, NULL, NULL);
+	if (ptr)
+		printf("Symbol %s found at 0x%lx\n", opts.symbol, ptr);
+	else
+		printf("Symbol %s not found\n", opts.symbol);
 	hotpatch_destroy(hp);
 	hp = NULL;
+	free(opts.symbol);
     return 0;
 }

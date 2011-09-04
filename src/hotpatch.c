@@ -81,7 +81,9 @@ struct hotpatch_is_opaque {
 		size_t size; /* size of the symbol if available */
 	} *symbols;
 	size_t symbols_num;
-	int inserted;
+	/* actions */
+	uint8_t attached;
+	uint8_t inserted;
 };
 
 enum {
@@ -508,6 +510,8 @@ hotpatch_t *hotpatch_create(pid_t pid, int verbose)
 void hotpatch_destroy(hotpatch_t *hp)
 {
 	if (hp) {
+		if (hp->attached)
+			hotpatch_detach(hp);
 		if (hp->fd_exe > 0) {
 			close(hp->fd_exe);
 			hp->fd_exe = -1;
@@ -594,14 +598,44 @@ size_t hotpatch_strnlen(const char *str, size_t maxlen)
 
 int hotpatch_attach(hotpatch_t *hp)
 {
-	if (hp) {
+	if (!hp)
+		return -1;
+	if (!hp->attached) {
+		long rc = 0;
+		if (hp->verbose > 3)
+			fprintf(stderr, "[%s:%d] Attaching to PID %d\n", __func__,
+					__LINE__, hp->pid);
+		rc = ptrace(PTRACE_ATTACH, hp->pid, NULL, NULL);
+		if (rc < 0) {
+			int err = errno;
+			fprintf(stderr, "[%s:%d] Ptrace Attach failed with error %s\n",
+						__func__, __LINE__, strerror(err));
+			hp->attached = 0;
+		} else {
+			hp->attached = 1;
+		}
 	}
-	return -1;
+	return hp->attached ? 0 : -1;
 }
 
 int hotpatch_detach(hotpatch_t *hp)
 {
-	if (hp)
-		return 0;
+	if (hp && hp->attached) {
+		long rc = 0;
+		if (hp->verbose > 3)
+			fprintf(stderr, "[%s:%d] Detaching from PID %d\n", __func__,
+					__LINE__, hp->pid);
+		rc = ptrace(PTRACE_DETACH, hp->pid, NULL, NULL);
+		if (rc < 0) {
+			int err = errno;
+			if (hp->verbose > 1)
+				fprintf(stderr, "[%s:%d] Ptrace detach failed with error %s\n",
+						__func__, __LINE__, strerror(err));
+			hp->attached = 0;
+		} else {
+			hp->attached = 0;
+			return 0;
+		}
+	}
 	return -1;
 }

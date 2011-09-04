@@ -21,7 +21,7 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#include <stdint.h>
+#include <sys/types.h>
 
 #define HOTPATCH_MAJOR_VERSION 0
 #define HOTPATCH_MINOR_VERSION 1
@@ -52,9 +52,15 @@ void hotpatch_destroy(hotpatch_t *hotpatch);
  */
 uintptr_t hotpatch_read_symbol(hotpatch_t *, const char *symbol, int *symtype,
 							   size_t *symsize);
-/* Attach to the process that you wanted to hotpatch */
+/*
+ * Attach to the process that you wanted to hotpatch. Returns 0 on success and 1
+ * on failure.
+ */
 int hotpatch_attach(hotpatch_t *);
-/* Detach from the process that you wanted to hotpatch */
+/*
+ * Detach from the process that you wanted to hotpatch. Returns -1 on failure
+ * or if nothing was attached earlier. Returns 0 if detaching succeeded.
+ */
 int hotpatch_detach(hotpatch_t *);
 /*
  * Inject a shared object into the process and invoke the given symbol with

@@ -1,6 +1,6 @@
 /*
  *  hotpatch is a dll injection strategy.
- *  Copyright (C) 2010-2011 Vikas Naresh Kumar
+ *  Copyright (C) 2010-2011 Vikas Naresh Kumar, Selective Intellect LLC
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
@@ -81,9 +81,10 @@ struct hotpatch_is_opaque {
 		size_t size; /* size of the symbol if available */
 	} *symbols;
 	size_t symbols_num;
+	uintptr_t entry_point;
 	/* actions */
-	uint8_t attached;
-	uint8_t inserted;
+	bool attached;
+	bool inserted;
 };
 
 enum {
@@ -452,6 +453,7 @@ static int exe_load_headers(hotpatch_t *hp)
 		if (hp->verbose > 0)
 			fprintf(stderr, "[%s:%d] Entry point %p\n", __func__, __LINE__,
 				(void *)hdr.e_entry);
+		hp->entry_point = (uintptr_t)hdr.e_entry;
 		if (hdr.e_machine != EM_X86_64) {
 			LOG_ERROR_UNSUPPORTED_PROCESSOR;
 			return -1;
@@ -584,6 +586,11 @@ uintptr_t hotpatch_read_symbol(hotpatch_t *hp, const char *symbol, int *type, si
 	return ptr;
 }
 
+uintptr_t hotpatch_get_entry_point(hotpatch_t *hp)
+{
+	return hp ? hp->entry_point : 0;
+}
+
 int hotpatch_insert(hotpatch_t *hp, const char *dll, const char *symbol,
 				void *arg)
 {
@@ -607,7 +614,7 @@ int hotpatch_attach(hotpatch_t *hp)
 	if (!hp)
 		return -1;
 	if (!hp->attached) {
-		hp->attached = 0;
+		hp->attached = false;
 		if (hp->verbose > 3)
 			fprintf(stderr, "[%s:%d] Trying to attach to PID %d\n", __func__,
 					__LINE__, hp->pid);
@@ -629,7 +636,7 @@ int hotpatch_attach(hotpatch_t *hp)
 					fprintf(stderr, "[%s:%d] PID %d was terminated.\n",
 							__func__, __LINE__, hp->pid);
 				} else {
-					hp->attached = 1;
+					hp->attached = true;
 					if (hp->verbose > 0)
 						fprintf(stderr, "[%s:%d] Attached to PID %d\n",
 								__func__, __LINE__, hp->pid);
@@ -657,7 +664,7 @@ int hotpatch_detach(hotpatch_t *hp)
 				fprintf(stderr, "[%s:%d] Detached from PID %d\n", __func__,
 						__LINE__, hp->pid);
 		}
-		hp->attached = 0;
+		hp->attached = false;
 	}
 	return rc;
 }
@@ -700,3 +707,4 @@ int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
 	}
 	return rc;
 }
+

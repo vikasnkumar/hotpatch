@@ -1,6 +1,6 @@
 /*
  *  hotpatch is a dll injection strategy.
- *  Copyright (C) 2010-2011 Vikas Naresh Kumar
+ *  Copyright (C) 2010-2011 Vikas Naresh Kumar, Selective Intellect LLC
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
@@ -57,9 +57,19 @@
 	#include <stddef.h>
 #endif
 
+#cmakedefine HOTPATCH_HAS_STDINT_H
+#ifdef HOTPATCH_HAS_STDINT_H
+	#include <stdint.h>
+#endif
+
 #cmakedefine HOTPATCH_HAS_STDARG_H
 #ifdef HOTPATCH_HAS_STDARG_H
 	#include <stdarg.h>
+#endif
+
+#cmakedefine HOTPATCH_HAS_STDBOOL_H
+#ifdef HOTPATCH_HAS_STDBOOL_H
+	#include <stdbool.h>
 #endif
 
 #cmakedefine HOTPATCH_HAS_TIME_H
@@ -70,6 +80,13 @@
 #cmakedefine HOTPATCH_HAS_SYS_TYPES_H
 #ifdef HOTPATCH_HAS_SYS_TYPES_H
 	#include <sys/types.h>
+#else
+	#ifndef __cplusplus
+		typedef enum {
+			false = 0,
+			true = 1
+		} bool;
+	#endif
 #endif
 
 #cmakedefine HOTPATCH_HAS_UNISTD_H

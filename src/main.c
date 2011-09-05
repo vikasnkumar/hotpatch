@@ -1,6 +1,6 @@
 /*
  *  hotpatch is a dll injection strategy.
- *  Copyright (C) 2010-2011 Vikas Naresh Kumar
+ *  Copyright (C) 2010-2011 Vikas Naresh Kumar, Selective Intellect LLC
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
@@ -20,6 +20,7 @@
 struct hp_options {
     pid_t pid;
     int verbose;
+	bool is__start;
 	char *symbol;
 };
 
@@ -54,6 +55,7 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
         extern int optind;
         extern char *optarg;
         optind = 1;
+		opts->is__start = false;
         while ((opt = getopt(argc, argv, "hs:v::")) != -1) {
             switch (opt) {
             case 'v':
@@ -65,6 +67,10 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
 					printf("[%s:%d] Out of memory\n", __func__, __LINE__);
 					return -1;
 				}
+				if (strcmp(optarg, HOTPATCH_LINUX_START) == 0)
+					opts->is__start = true;
+				else
+					opts->is__start = false;
 				break;
             case 'h':
             default:
@@ -82,8 +88,10 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
             printf("Process PID can't be 0. Tried parsing: %s\n", argv[optind]);
 			return -1;
         }
-		if (!opts->symbol)
-			opts->symbol = strdup("_start");
+		if (!opts->symbol) {
+			opts->symbol = strdup(HOTPATCH_LINUX_START);
+			opts->is__start = true;
+		}
 		if (!opts->symbol) {
 			printf("[%s:%d] Out of memory\n", __func__, __LINE__);
 			return -1;
@@ -113,7 +121,12 @@ int main(int argc, char **argv)
 			rc = -1;
 			break;
 		}
-		ptr = hotpatch_read_symbol(hp, opts.symbol, NULL, NULL);
+		/* handles the stripped apps as well */
+		if (opts.is__start) {
+			ptr = hotpatch_get_entry_point(hp);
+		} else {
+			ptr = hotpatch_read_symbol(hp, opts.symbol, NULL, NULL);
+		}
 		if (!ptr) {
 			printf("Symbol %s not found. Cannot proceed\n", opts.symbol);
 			break;
@@ -124,9 +137,13 @@ int main(int argc, char **argv)
 			printf("Failed to attach to process. Cannot proceed\n");
 			break;
 		}
-		hotpatch_set_execution_pointer(hp, ptr);
-		rc = hotpatch_detach(hp);
+		rc = hotpatch_set_execution_pointer(hp, ptr);
+		if (rc < 0) {
+			printf("Failed to set execution pointer to 0x%lx\n", ptr);
+			break;
+		}
 	} while (0);
+	rc = hotpatch_detach(hp);
 	hotpatch_destroy(hp);
 	hp = NULL;
 	if (opts.symbol)

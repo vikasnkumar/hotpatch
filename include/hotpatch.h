@@ -1,6 +1,6 @@
 /*
  *  hotpatch is a dll injection strategy.
- *  Copyright (C) 2010-2011 Vikas Naresh Kumar
+ *  Copyright (C) 2010-2011 Vikas Naresh Kumar, Selective Intellect LLC
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
@@ -25,6 +25,10 @@ extern "C" {
 
 #define HOTPATCH_MAJOR_VERSION 0
 #define HOTPATCH_MINOR_VERSION 1
+
+#ifndef HOTPATCH_LINUX_START
+	#define HOTPATCH_LINUX_START "_start"
+#endif
 
 enum {
 	HOTPATCH_SYMBOL_IS_UNKNOWN,
@@ -52,6 +56,10 @@ void hotpatch_destroy(hotpatch_t *hotpatch);
  */
 uintptr_t hotpatch_read_symbol(hotpatch_t *, const char *symbol, int *symtype,
 							   size_t *symsize);
+/*
+ * Get the entry point of the executable in question
+ */
+uintptr_t hotpatch_get_entry_point(hotpatch_t *);
 /*
  * Attach to the process that you wanted to hotpatch. Returns 0 on success and 1
  * on failure.

@@ -63,6 +63,11 @@ int hotpatch_attach(hotpatch_t *);
  */
 int hotpatch_detach(hotpatch_t *);
 /*
+ * Sets the execution pointer to point to the address given by the user.
+ * Returns 0 on success and -1 on failure.
+ */
+int hotpatch_set_execution_pointer(hotpatch_t *, uintptr_t location);
+/*
  * Inject a shared object into the process and invoke the given symbol with
  * arguments
  */

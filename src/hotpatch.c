@@ -661,3 +661,42 @@ int hotpatch_detach(hotpatch_t *hp)
 	}
 	return rc;
 }
+
+int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
+{
+	int rc = -1;
+	if (ptr && hp && hp->attached) {
+		struct user regs;
+		memset(&regs, 0, sizeof(regs));
+		if (ptrace(PTRACE_GETREGS, hp->pid, NULL, &regs) < 0) {
+			int err = errno;
+			fprintf(stderr, "[%s:%d] Ptrace getregs failed with error %s\n",
+					__func__, __LINE__, strerror(err));
+		} else {
+			if (hp->verbose > 1)
+				fprintf(stderr, "[%s:%d] RIP is 0x%lx\n", __func__, __LINE__,
+						regs.regs.rip);
+			regs.regs.rip = ptr + sizeof(void *);
+			if (ptrace(PTRACE_SETREGS, hp->pid, NULL, &regs) < 0) {
+				int err = errno;
+				fprintf(stderr, "[%s:%d] Ptrace setregs failed with error %s\n",
+						__func__, __LINE__, strerror(err));
+			} else {
+				if (hp->verbose > 0)
+					fprintf(stderr, "[%s:%d] Set RIP to 0x%lx\n", __func__, __LINE__,
+							ptr);
+				rc = 0;
+			}
+		}
+	} else {
+		if (!ptr) {
+			fprintf(stderr, "[%s:%d] The execution pointer is null.\n",
+					__func__, __LINE__);
+		}
+		if (!hp || !hp->attached) {
+			fprintf(stderr, "[%s:%d] The process is not attached to.\n",
+					__func__, __LINE__);
+		}
+	}
+	return rc;
+}

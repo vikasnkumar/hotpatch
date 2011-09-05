@@ -124,6 +124,7 @@ int main(int argc, char **argv)
 			printf("Failed to attach to process. Cannot proceed\n");
 			break;
 		}
+		hotpatch_set_execution_pointer(hp, ptr);
 		rc = hotpatch_detach(hp);
 	} while (0);
 	hotpatch_destroy(hp);

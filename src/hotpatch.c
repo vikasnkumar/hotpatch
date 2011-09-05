@@ -696,7 +696,9 @@ int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
 			if (hp->verbose > 1)
 				fprintf(stderr, "[%s:%d] RIP is 0x%lx\n", __func__, __LINE__,
 						regs.regs.rip);
-			regs.regs.rip = ptr + sizeof(void *);
+			if (ptr == hp->entry_point)
+				ptr += sizeof(void *);
+			regs.regs.rip = ptr;
 			if (ptrace(PTRACE_SETREGS, hp->pid, NULL, &regs) < 0) {
 				int err = errno;
 				fprintf(stderr, "[%s:%d] Ptrace setregs failed with error %s\n",

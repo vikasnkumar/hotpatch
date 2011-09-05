@@ -347,14 +347,15 @@ static int exe_load_section_headers(hotpatch_t *hp)
 				hp->sechdr_num);
 	for (idx = 0; idx < hp->sechdr_num; ++idx) {
 		const char *name = &hp->strsectbl[sechdrs[idx].sh_name];
-		if (name) {
-			fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: %ld\n",
-					__func__, __LINE__, name, (void *)sechdrs[idx].sh_offset,
-					sechdrs[idx].sh_size);
-		} else {
-			fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: %ld\n",
-					__func__, __LINE__, "N/A", (void *)sechdrs[idx].sh_offset,
-					sechdrs[idx].sh_size);
+		if (hp->verbose > 0) {
+			if (name)
+				fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: %ld\n",
+						__func__, __LINE__, name, (void *)sechdrs[idx].sh_offset,
+						sechdrs[idx].sh_size);
+			else
+				fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: %ld\n",
+						__func__, __LINE__, "N/A", (void *)sechdrs[idx].sh_offset,
+						sechdrs[idx].sh_size);
 		}
 		switch (sechdrs[idx].sh_type) {
 		case SHT_SYMTAB:
@@ -411,11 +412,15 @@ static int exe_load_program_headers(hotpatch_t *hp)
 		fprintf(stderr, "[%s:%d] Number of segments: %ld\n", __func__, __LINE__,
 				hp->proghdr_num);
 	proghdrs = (Elf64_Phdr *)hp->proghdrs;
-	for (idx = 0; idx < hp->proghdr_num; ++idx) {
-		fprintf(stderr,
-				"[%s:%d] Prog-header %ld: Type: %d VAddr: %p FileSz: %ld MemSz: %ld\n",
-				__func__, __LINE__, idx, proghdrs[idx].p_type, (void *)proghdrs[idx].p_vaddr,
-				proghdrs[idx].p_filesz, proghdrs[idx].p_memsz);
+	if (hp->verbose > 2) {
+		for (idx = 0; idx < hp->proghdr_num; ++idx) {
+			fprintf(stderr,
+					"[%s:%d] Prog-header %ld: Type: %d "
+					"VAddr: %p FileSz: %ld MemSz: %ld\n",
+					__func__, __LINE__, idx, proghdrs[idx].p_type,
+					(void *)proghdrs[idx].p_vaddr,
+					proghdrs[idx].p_filesz, proghdrs[idx].p_memsz);
+		}
 	}
 	return 0;
 }
@@ -444,7 +449,8 @@ static int exe_load_headers(hotpatch_t *hp)
 	case HOTPATCH_EXE_IS_64BIT:
 		if (hp->verbose > 3)
 			fprintf(stderr, "[%s:%d] 64-bit valid exe\n", __func__, __LINE__);
-		fprintf(stderr, "[%s:%d] Entry point %p\n", __func__, __LINE__,
+		if (hp->verbose > 0)
+			fprintf(stderr, "[%s:%d] Entry point %p\n", __func__, __LINE__,
 				(void *)hdr.e_entry);
 		if (hdr.e_machine != EM_X86_64) {
 			LOG_ERROR_UNSUPPORTED_PROCESSOR;
@@ -609,7 +615,7 @@ int hotpatch_attach(hotpatch_t *hp)
 		if (rc < 0) {
 			int err = errno;
 			fprintf(stderr, "[%s:%d] Ptrace Attach failed with error %s\n",
-						__func__, __LINE__, strerror(err));
+					__func__, __LINE__, strerror(err));
 			hp->attached = 0;
 		} else {
 			hp->attached = 1;

@@ -97,26 +97,32 @@ int main(int argc, char **argv)
 {
     struct hp_options opts = { 0 };
     hotpatch_t *hp = NULL;
-	uintptr_t ptr = 0;
-    /* parse all arguments first */
+	int rc = 0;
+	/* parse all arguments first */
     if (parse_arguments(argc, argv, &opts) < 0) {
         return -1;
     }
     print_options(&opts);
-	hp = hotpatch_create(opts.pid, opts.verbose);
-	if (!hp) {
-		fprintf(stderr, "[%s:%d] Unable to create hotpatch for PID %d\n",
-				__func__, __LINE__, opts.pid);
-		free(opts.symbol);
-		return -1;
-	}
-	ptr = hotpatch_read_symbol(hp, opts.symbol, NULL, NULL);
-	if (ptr)
+	/* break from execution whenever a step fails */
+	do {
+		uintptr_t ptr = 0;
+		hp = hotpatch_create(opts.pid, opts.verbose);
+		if (!hp) {
+			fprintf(stderr, "[%s:%d] Unable to create hotpatch for PID %d\n",
+					__func__, __LINE__, opts.pid);
+			rc = -1;
+			break;
+		}
+		ptr = hotpatch_read_symbol(hp, opts.symbol, NULL, NULL);
+		if (!ptr) {
+			printf("Symbol %s not found. Cannot proceed\n", opts.symbol);
+			break;
+		}
 		printf("Symbol %s found at 0x%lx\n", opts.symbol, ptr);
-	else
-		printf("Symbol %s not found\n", opts.symbol);
+
+	} while (0);
 	hotpatch_destroy(hp);
 	hp = NULL;
 	free(opts.symbol);
-    return 0;
+    return rc;
 }

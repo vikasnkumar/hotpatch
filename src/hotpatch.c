@@ -607,18 +607,34 @@ int hotpatch_attach(hotpatch_t *hp)
 	if (!hp)
 		return -1;
 	if (!hp->attached) {
-		long rc = 0;
+		hp->attached = 0;
 		if (hp->verbose > 3)
-			fprintf(stderr, "[%s:%d] Attaching to PID %d\n", __func__,
+			fprintf(stderr, "[%s:%d] Trying to attach to PID %d\n", __func__,
 					__LINE__, hp->pid);
-		rc = ptrace(PTRACE_ATTACH, hp->pid, NULL, NULL);
-		if (rc < 0) {
+		if (ptrace(PTRACE_ATTACH, hp->pid, NULL, NULL) < 0) {
 			int err = errno;
 			fprintf(stderr, "[%s:%d] Ptrace Attach failed with error %s\n",
 					__func__, __LINE__, strerror(err));
-			hp->attached = 0;
 		} else {
-			hp->attached = 1;
+			int status = 0;
+			if (hp->verbose > 1)
+				fprintf(stderr, "[%s:%d] Waiting for the child.\n", __func__,
+						__LINE__);
+			if (waitpid(-1, &status, 0) < 0) {
+				int err = errno;
+				fprintf(stderr, "[%s:%d] Waitpid failed with error: %s\n",
+						__func__, __LINE__, strerror(err));
+			} else {
+				if (WIFEXITED(status) || WIFSIGNALED(status)) {
+					fprintf(stderr, "[%s:%d] PID %d was terminated.\n",
+							__func__, __LINE__, hp->pid);
+				} else {
+					hp->attached = 1;
+					if (hp->verbose > 0)
+						fprintf(stderr, "[%s:%d] Attached to PID %d\n",
+								__func__, __LINE__, hp->pid);
+				}
+			}
 		}
 	}
 	return hp->attached ? 0 : -1;
@@ -626,22 +642,22 @@ int hotpatch_attach(hotpatch_t *hp)
 
 int hotpatch_detach(hotpatch_t *hp)
 {
+	int rc = -1;
 	if (hp && hp->attached) {
-		long rc = 0;
 		if (hp->verbose > 3)
 			fprintf(stderr, "[%s:%d] Detaching from PID %d\n", __func__,
 					__LINE__, hp->pid);
-		rc = ptrace(PTRACE_DETACH, hp->pid, NULL, NULL);
-		if (rc < 0) {
+		if (ptrace(PTRACE_DETACH, hp->pid, NULL, NULL) < 0) {
 			int err = errno;
-			if (hp->verbose > 1)
-				fprintf(stderr, "[%s:%d] Ptrace detach failed with error %s\n",
-						__func__, __LINE__, strerror(err));
-			hp->attached = 0;
+			fprintf(stderr, "[%s:%d] Ptrace detach failed with error %s\n",
+					__func__, __LINE__, strerror(err));
 		} else {
-			hp->attached = 0;
-			return 0;
+			rc = 0;
+			if (hp->verbose > 0)
+				fprintf(stderr, "[%s:%d] Detached from PID %d\n", __func__,
+						__LINE__, hp->pid);
 		}
+		hp->attached = 0;
 	}
-	return -1;
+	return rc;
 }

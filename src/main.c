@@ -119,10 +119,16 @@ int main(int argc, char **argv)
 			break;
 		}
 		printf("Symbol %s found at 0x%lx\n", opts.symbol, ptr);
-
+		rc = hotpatch_attach(hp);
+		if (rc < 0) {
+			printf("Failed to attach to process. Cannot proceed\n");
+			break;
+		}
+		rc = hotpatch_detach(hp);
 	} while (0);
 	hotpatch_destroy(hp);
 	hp = NULL;
-	free(opts.symbol);
+	if (opts.symbol)
+		free(opts.symbol);
     return rc;
 }

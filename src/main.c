@@ -35,6 +35,7 @@ struct hp_options {
     int verbose;
 	bool is__start;
 	char *symbol;
+	bool dryrun;
 };
 
 void print_usage(const char *app)
@@ -44,6 +45,7 @@ void print_usage(const char *app)
 	printf("-h           This help message.\n");
 	printf("-v[vvvv]     Enable verbose logging. Add more 'v's for more\n");
 	printf("-s <name>    Specify symbol name. Default is _start\n");
+	printf("-N           Dry run. Do not modify anything in process\n");
 }
 
 void print_options(const struct hp_options *opts)
@@ -53,10 +55,12 @@ void print_options(const struct hp_options *opts)
 				"Options Given:\n"
 				"Verbose Level: %d\n"
 				"Process PID: %d\n"
-				"Symbol name: %s\n",
+				"Symbol name: %s\n"
+				"Dry run: %s\n",
 				opts->verbose,
 				opts->pid,
-				opts->symbol
+				opts->symbol,
+				(opts->dryrun ? "true" : "false")
 			  );
 	}
 }
@@ -69,7 +73,8 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
         extern char *optarg;
         optind = 1;
 		opts->is__start = false;
-        while ((opt = getopt(argc, argv, "hs:v::")) != -1) {
+		opts->dryrun = false;
+        while ((opt = getopt(argc, argv, "hNs:v::")) != -1) {
             switch (opt) {
             case 'v':
                 opts->verbose += optarg ? (int)strnlen(optarg, 5) : 1;
@@ -84,6 +89,9 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
 					opts->is__start = true;
 				else
 					opts->is__start = false;
+				break;
+			case 'N':
+				opts->dryrun = true;
 				break;
             case 'h':
             default:
@@ -145,6 +153,8 @@ int main(int argc, char **argv)
 			break;
 		}
 		printf("Symbol %s found at 0x%lx\n", opts.symbol, ptr);
+		if (opts.dryrun)
+			break;
 		rc = hotpatch_attach(hp);
 		if (rc < 0) {
 			printf("Failed to attach to process. Cannot proceed\n");

@@ -93,9 +93,9 @@ struct hotpatch_is_opaque {
 	} *symbols;
 	size_t symbols_num;
 	uintptr_t entry_point;
-	uintptr_t proghdr_interp_size;
-	char *proghdr_interp;/* interpreter string */
-	uintptr_t proghdr_interp_address;
+	uintptr_t interp_size;
+	char *interp;/* interpreter string */
+	uintptr_t interp_address;
 	/* actions */
 	bool attached;
 	bool inserted;
@@ -465,24 +465,24 @@ static int exe_load_program_headers(hotpatch_t *hp)
 				rc = -1;
 				break;
 			}
-			if (hp->proghdr_interp)
-				free(hp->proghdr_interp);
-			hp->proghdr_interp = malloc(proghdrs[idx].p_filesz);
-			if (!hp->proghdr_interp) {
+			if (hp->interp)
+				free(hp->interp);
+			hp->interp = malloc(proghdrs[idx].p_filesz);
+			if (!hp->interp) {
 				LOG_ERROR_OUT_OF_MEMORY;
 				rc = -1;
 				break;
 			}
-			if (read(hp->fd_exe, hp->proghdr_interp, proghdrs[idx].p_filesz) < 0) {
+			if (read(hp->fd_exe, hp->interp, proghdrs[idx].p_filesz) < 0) {
 				LOG_ERROR_FILE_READ;
 				rc = -1;
 				break;
 			}
-			hp->proghdr_interp_size = proghdrs[idx].p_filesz;
-			hp->proghdr_interp_address = proghdrs[idx].p_vaddr;
+			hp->interp_size = proghdrs[idx].p_filesz;
+			hp->interp_address = proghdrs[idx].p_vaddr;
 			if (hp->verbose > 0)
 				fprintf(stderr, "[%s:%d] Found %s at 0x%lx\n",
-						__func__, __LINE__, hp->proghdr_interp,
+						__func__, __LINE__, hp->interp,
 						proghdrs[idx].p_vaddr);
 		} else if (proghdrs[idx].p_type == PT_DYNAMIC) {
 			if (hp->verbose > 1)
@@ -623,9 +623,9 @@ void hotpatch_destroy(hotpatch_t *hp)
 			free(hp->sechdrs);
 			hp->sechdrs = NULL;
 		}
-		if (hp->proghdr_interp) {
-			free(hp->proghdr_interp);
-			hp->proghdr_interp = NULL;
+		if (hp->interp) {
+			free(hp->interp);
+			hp->interp = NULL;
 		}
 		if (hp->proghdrs) {
 			free(hp->proghdrs);

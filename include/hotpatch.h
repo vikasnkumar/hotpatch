@@ -91,6 +91,15 @@ int hotpatch_detach(hotpatch_t *);
  */
 int hotpatch_set_execution_pointer(hotpatch_t *, uintptr_t location);
 /*
+ * Inject custom code at the given location which needs to be the execution
+ * pointer and will be where the RIP/EIP register will be set to point to for
+ * execution. Return 0 on success and -1 on failure.
+ * The code will start executing if the execute flag is set to 1.
+ *
+ */
+int hotpatch_inject_code_at(hotpatch_t *, uintptr_t location,
+				const unsigned char *code, size_t len, int8_t execute);
+/*
  * Inject a shared object into the process and invoke the given symbol with
  * arguments
  */

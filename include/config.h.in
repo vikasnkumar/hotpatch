@@ -92,6 +92,11 @@
 	#include <time.h>
 #endif
 
+#cmakedefine HOTPATCH_HAS_SYS_TIME_H
+#ifdef HOTPATCH_HAS_SYS_TIME_H
+	#include <sys/time.h>
+#endif
+
 #cmakedefine HOTPATCH_HAS_SYS_TYPES_H
 #ifdef HOTPATCH_HAS_SYS_TYPES_H
 	#include <sys/types.h>
@@ -174,6 +179,11 @@
 #ifdef HOTPATCH_HAS_LINUX_SYS_USER_H
 	#include <sys/types.h>
 	#include <sys/user.h>
+#endif
+
+#cmakedefine HOTPATCH_HAS_LINUX_SYS_SYSCALL_H
+#ifdef HOTPATCH_HAS_LINUX_SYS_SYSCALL_H
+	#include <sys/syscall.h>
 #endif
 
 #cmakedefine HOTPATCH_HAS_LINUX_DLITERPHDR_FN

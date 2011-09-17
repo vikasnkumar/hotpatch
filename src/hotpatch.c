@@ -27,7 +27,8 @@
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */#include <hotpatch_config.h>
+ */
+#include <hotpatch_config.h>
 #include <hotpatch.h>
 
 #define OS_MAX_BUFFER 512
@@ -789,3 +790,25 @@ int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
 	return rc;
 }
 
+int hotpatch_inject_code_at(hotpatch_t *hp, uintptr_t location,
+				const unsigned char *code, size_t len, int8_t execute)
+{
+	int rc = -1;
+	if (location && hp && hp->attached && code && len > 0) {
+
+	} else {
+		if (!location) {
+			fprintf(stderr, "[%s:%d] The location pointer is null.\n",
+					__func__, __LINE__);
+		}
+		if (!hp || !hp->attached) {
+			fprintf(stderr, "[%s:%d] The process is not attached to.\n",
+					__func__, __LINE__);
+		}
+		if (!code || len == 0) {
+			fprintf(stderr, "[%s:%d] No code specified for injection.\n",
+					__func__, __LINE__);
+		}
+	}
+	return rc;
+}

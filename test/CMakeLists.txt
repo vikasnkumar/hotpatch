@@ -34,7 +34,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(ptracetest ptrace.c)
 target_link_libraries(ptracetest ${HOTPATCH_DEP_LIBS})
-add_test(ptracetest ${CMAKE_CURRENT_BINARY_DIR}/ptracetest)
+#add_test(ptracetest ${CMAKE_CURRENT_BINARY_DIR}/ptracetest)
 
 add_executable(dummy dummy.c)
 add_executable(selftest self.c)
@@ -44,3 +44,6 @@ add_test(selftest ${CMAKE_CURRENT_BINARY_DIR}/selftest)
 add_executable(cpptest cpptest.cpp)
 target_link_libraries(cpptest hotpatch)
 add_test(cpptest ${CMAKE_CURRENT_BINARY_DIR}/cpptest)
+
+add_executable(asmtest asmtest.c)
+add_test(asmtest ${CMAKE_CURRENT_BINARY_DIR}/asmtest)

@@ -47,8 +47,19 @@ void syscall_free(intptr_t ptr)
 		syscall(SYS_brk, ptr);
 }
 
+/*
+ * The general form of asm() is
+ * asm ("code" : outputs : inputs : clobbers);
+ *
+ */
 intptr_t gccasm_alloc(size_t count)
 {
+	__asm__ volatile (
+		"xor %%rax, %%rax\n"
+		:
+		:
+		: "rax"
+	);
 	return -1;
 }
 

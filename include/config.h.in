@@ -67,6 +67,11 @@
     #define strnlen(a,b) hotpatch_strnlen(a,b)
 #endif
 
+#cmakedefine HOTPATCH_HAS_STRTOKR_FN
+#ifndef HOTPATCH_HAS_STRTOKR_FN
+	#define strtok_r(a,b,c) strtok(a,b)
+#endif
+
 #cmakedefine HOTPATCH_HAS_STDDEF_H
 #ifdef HOTPATCH_HAS_STDDEF_H
 	#include <stddef.h>

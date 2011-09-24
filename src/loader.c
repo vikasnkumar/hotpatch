@@ -32,11 +32,12 @@
 #include <hotpatch_internal.h>
 
 enum {
-    PROCMAPS_PERMS_NONE  = 0x0,
-    PROCMAPS_PERMS_READ  = 0x1,
-    PROCMAPS_PERMS_EXEC  = 0x2,
-    PROCMAPS_PERMS_WRITE = 0x4,
-    PROCMAPS_PERMS_PVT   = 0x8
+    PROCMAPS_PERMS_NONE		= 0x0,
+    PROCMAPS_PERMS_READ		= 0x1,
+    PROCMAPS_PERMS_EXEC		= 0x2,
+    PROCMAPS_PERMS_WRITE	= 0x4,
+    PROCMAPS_PERMS_PRIVATE  = 0x8,
+	PROCMAPS_PERMS_SHARED   = 0x10,
 };
 
 enum {
@@ -78,11 +79,14 @@ void ld_procmaps_dump(struct ld_procmaps *pm)
     fprintf(stderr, "[%s:%d] Inode: %ld\n", __func__, __LINE__,
 			pm->inode);
     fprintf(stderr, "[%s:%d] Permissions: Read(%d) Write(%d) "
-					"Execute(%d) Private(%d)\n", __func__, __LINE__,
+					"Execute(%d) Private(%d) Shared(%d)\n",
+			__func__, __LINE__,
             (pm->permissions & PROCMAPS_PERMS_READ) ? 1 : 0,
             (pm->permissions & PROCMAPS_PERMS_WRITE) ? 1 : 0,
             (pm->permissions & PROCMAPS_PERMS_EXEC) ? 1 : 0,
-            (pm->permissions & PROCMAPS_PERMS_PVT) ? 1 : 0);
+            (pm->permissions & PROCMAPS_PERMS_PRIVATE) ? 1 : 0,
+			(pm->permissions & PROCMAPS_PERMS_SHARED) ? 1 : 0
+	);
     fprintf(stderr, "[%s:%d] Pathname length: %ld\n", __func__, __LINE__,
 			pm->pathname_sz);
     fprintf(stderr, "[%s:%d] Filetype: %d\n", __func__, __LINE__,
@@ -140,8 +144,11 @@ int ld_procmaps_parse(char *buf, size_t bufsz, struct ld_procmaps *pm,
                 pm->permissions |= PROCMAPS_PERMS_EXEC;
                 break;
             case 'p':
-                pm->permissions |= PROCMAPS_PERMS_PVT;
+                pm->permissions |= PROCMAPS_PERMS_PRIVATE;
                 break;
+			case 's':
+				pm->permissions |= PROCMAPS_PERMS_SHARED;
+				break;
             case '-':
                 break;
             default:

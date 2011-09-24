@@ -32,7 +32,7 @@ project(hotpatch)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-add_library(hotpatch SHARED hotpatch.c exedetails.c)
+add_library(hotpatch SHARED hotpatch.c exedetails.c loader.c)
 target_link_libraries(hotpatch ${HOTPATCH_DEP_LIBS})
 install(TARGETS hotpatch LIBRARY DESTINATION lib)
 

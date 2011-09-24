@@ -37,9 +37,9 @@ target_link_libraries(ptracetest ${HOTPATCH_DEP_LIBS})
 #add_test(ptracetest ${CMAKE_CURRENT_BINARY_DIR}/ptracetest)
 
 add_executable(dummy dummy.c)
-add_executable(selftest self.c)
-target_link_libraries(selftest ${HOTPATCH_DEP_LIBS})
-add_test(selftest ${CMAKE_CURRENT_BINARY_DIR}/selftest)
+add_executable(loadertest loader.c)
+target_link_libraries(loadertest hotpatch)
+add_test(loadertest ${CMAKE_CURRENT_BINARY_DIR}/loadertest)
 
 add_executable(cpptest cpptest.cpp)
 target_link_libraries(cpptest hotpatch)

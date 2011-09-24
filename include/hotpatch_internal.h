@@ -33,6 +33,8 @@
 
 #include <hotpatch_config.h>
 
+#define OS_MAX_BUFFER 512
+
 #undef LOG_ERROR_INVALID_PID
 #define LOG_ERROR_INVALID_PID(A) do { \
 	fprintf(stderr, "[%s:%d] Invalid PID: %d\n", __func__, __LINE__, A); \
@@ -77,6 +79,8 @@
 		fprintf(stderr, "[%s:%d] Exe headers loaded.\n", __func__, __LINE__); \
 } while (0)
 
+struct ld_procmaps;
+
 struct hotpatch_is_opaque {
 	pid_t pid;
 	int verbose;
@@ -110,8 +114,17 @@ struct hotpatch_is_opaque {
 		char *name;
 		size_t length;
 		uintptr_t ph_addr;
-		uintptr_t dyn_addr;
-	} loader; /* dynamic loader */
+	} interp; /* dynamic loader from .interp */
+	struct ld_procmaps *ld_maps;
+	size_t ld_maps_num;
+	struct hotpatch_library {
+		char *pathname;
+		size_t length;
+		ino_t inode;
+		uintptr_t addr_begin;
+		uintptr_t addr_end;
+	} *libs;
+	size_t libs_num; /* 0th element is the loader */
 	/* actions */
 	bool attached;
 	bool inserted;
@@ -120,5 +133,18 @@ struct hotpatch_is_opaque {
 int exe_open_file(pid_t pid, int verbose);
 
 int exe_load_headers(struct hotpatch_is_opaque *hp);
+
+struct ld_procmaps *ld_load_maps(pid_t pid, int verbose, size_t *num);
+
+void ld_free_maps(struct ld_procmaps *, size_t num);
+
+/* the full path of the library needs to be given. */
+int ld_find_library(const struct ld_procmaps *, const size_t num,
+					const char *libpath,
+					struct hotpatch_library *lib, int verbose);
+
+/* finds the address of the symbol in the library if it exists */
+uintptr_t ld_find_address(const struct hotpatch_library *hpl, const char *symbol,
+						  int verbose);
 
 #endif /* __LIBHOTPATCH_INTERNAL_H__ */

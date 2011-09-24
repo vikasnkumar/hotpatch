@@ -54,7 +54,22 @@ hotpatch_t *hotpatch_create(pid_t pid, int verbose)
 			}
 			if (exe_load_headers(hp) >= 0) {
 				LOG_INFO_HEADERS_LOADED(verbose);
+			} else {
+				fprintf(stderr, "[%s:%d] Unable to load Exe headers.\n",
+						__func__, __LINE__);
+				hotpatch_destroy(hp);
+				return NULL;
 			}
+			hp->ld_maps = ld_load_maps(hp->pid, hp->verbose, &hp->ld_maps_num);
+			if (!hp->ld_maps) {
+				fprintf(stderr, "[%s:%d] Unable to load data in "
+							"/proc/%d/maps.\n", __func__, __LINE__, pid);
+				hotpatch_destroy(hp);
+				return NULL;
+			}
+			if (verbose > 2)
+				fprintf(stderr, "[%s:%d] /proc/%d/maps loaded.\n",
+						__func__, __LINE__, pid);
 			if (hp->symbols && hp->symbols_num > 0) {
 				qsort(hp->symbols, hp->symbols_num,
 					  sizeof(*hp->symbols), hotpatch_cmpqsort);
@@ -96,13 +111,18 @@ void hotpatch_destroy(hotpatch_t *hp)
 			free(hp->sechdrs);
 			hp->sechdrs = NULL;
 		}
-		if (hp->loader.name) {
-			free(hp->loader.name);
-			hp->loader.name = NULL;
+		if (hp->interp.name) {
+			free(hp->interp.name);
+			hp->interp.name = NULL;
 		}
 		if (hp->proghdrs) {
 			free(hp->proghdrs);
 			hp->proghdrs = NULL;
+		}
+		if (hp->ld_maps) {
+			ld_free_maps(hp->ld_maps, hp->ld_maps_num);
+			hp->ld_maps = NULL;
+			hp->ld_maps_num = 0;
 		}
 		free(hp);
 		hp = NULL;

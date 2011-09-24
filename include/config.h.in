@@ -77,6 +77,11 @@
 	#include <stddef.h>
 #endif
 
+#cmakedefine HOTPATCH_HAS_LIMITS_H
+#ifdef HOTPATCH_HAS_LIMITS_H
+	#include <limits.h>
+#endif
+
 #cmakedefine HOTPATCH_HAS_STDINT_H
 #ifdef HOTPATCH_HAS_STDINT_H
 	#include <stdint.h>

@@ -64,6 +64,7 @@ check_include_file("sys/time.h" HOTPATCH_HAS_SYS_TIME_H)
 check_include_file("sys/types.h" HOTPATCH_HAS_SYS_TYPES_H)
 check_include_file("unistd.h" HOTPATCH_HAS_UNISTD_H)
 check_include_file("assert.h" HOTPATCH_HAS_ASSERT_H)
+check_include_file("limits.h" HOTPATCH_HAS_LIMITS_H)
 # look for mach kernel header files
 if (APPLE AND ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
 	check_include_file("mach/message.h" HOTPATCH_HAS_MACH_MESSAGE_H)

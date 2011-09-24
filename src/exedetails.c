@@ -398,25 +398,27 @@ static int exe_load_program_headers(hotpatch_t *hp)
 				rc = -1;
 				break;
 			}
-			if (hp->interp)
-				free(hp->interp);
-			hp->interp = malloc(proghdrs[idx].p_filesz);
-			if (!hp->interp) {
+			if (hp->loader.name) {
+				free(hp->loader.name);
+				memset(&hp->loader, 0, sizeof(hp->loader));
+			}
+			hp->loader.name = malloc(proghdrs[idx].p_filesz);
+			if (!hp->loader.name) {
 				LOG_ERROR_OUT_OF_MEMORY;
 				rc = -1;
 				break;
 			}
-			if (read(hp->fd_exe, hp->interp, proghdrs[idx].p_filesz) < 0) {
+			if (read(hp->fd_exe, hp->loader.name, proghdrs[idx].p_filesz) < 0) {
 				LOG_ERROR_FILE_READ;
 				rc = -1;
 				break;
 			}
-			hp->interp_size = proghdrs[idx].p_filesz;
-			hp->interp_address = proghdrs[idx].p_vaddr;
+			hp->loader.length = proghdrs[idx].p_filesz;
+			hp->loader.ph_addr = proghdrs[idx].p_vaddr;
 			if (hp->verbose > 0)
-				fprintf(stderr, "[%s:%d] Found %s at 0x%lx\n",
-						__func__, __LINE__, hp->interp,
-						proghdrs[idx].p_vaddr);
+				fprintf(stderr, "[%s:%d] Found %s at V-Addr 0x%lx\n",
+						__func__, __LINE__, hp->loader.name,
+						hp->loader.ph_addr);
 		} else if (proghdrs[idx].p_type == PT_DYNAMIC) {
 			if (hp->verbose > 1)
 				fprintf(stderr, "[%s:%d] PT_DYNAMIC section found\n", __func__,

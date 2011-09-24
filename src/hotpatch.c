@@ -96,9 +96,9 @@ void hotpatch_destroy(hotpatch_t *hp)
 			free(hp->sechdrs);
 			hp->sechdrs = NULL;
 		}
-		if (hp->interp) {
-			free(hp->interp);
-			hp->interp = NULL;
+		if (hp->loader.name) {
+			free(hp->loader.name);
+			hp->loader.name = NULL;
 		}
 		if (hp->proghdrs) {
 			free(hp->proghdrs);

@@ -106,9 +106,12 @@ struct hotpatch_is_opaque {
 	} *symbols;
 	size_t symbols_num;
 	uintptr_t entry_point;
-	uintptr_t interp_size;
-	char *interp;/* interpreter string */
-	uintptr_t interp_address;
+	struct hotpatch_loader {
+		char *name;
+		size_t length;
+		uintptr_t ph_addr;
+		uintptr_t dyn_addr;
+	} loader; /* dynamic loader */
 	/* actions */
 	bool attached;
 	bool inserted;

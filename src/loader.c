@@ -358,6 +358,9 @@ int ld_find_library(const struct ld_procmaps *maps, const size_t mapnum,
 			}
 			inode = statbuf.st_ino;
 		} else {
+			if (verbose > 2)
+				fprintf(stderr, "[%s:%d] Not doing an inode match.\n",
+						__func__, __LINE__);
 			nonlib_match = (strchr(libpath, '[') || strchr(libpath, ']')) ?
 							true : false;
 			if (verbose > 2 && nonlib_match)

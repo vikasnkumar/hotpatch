@@ -40,11 +40,27 @@ int main(int argc, char **argv)
 {
     struct ld_procmaps *maps = NULL;
 	size_t mapnum = 0;
+	int ret;
 	pid_t pid = argc > 1 ? (pid_t)strtol(argv[1], NULL, 10) : getpid();
 	assert(pid != 0);
 	maps = ld_load_maps(pid, 6 /* largest verbose */, &mapnum);
 	assert(mapnum > 0);
 	assert(maps != NULL);
+	ret = 0;
+	ret = ld_find_library(maps, mapnum, "[heap]", false, NULL, 6);
+	assert(ret >= 0);
+	ret = ld_find_library(maps, mapnum, "[stack", false, NULL, 6);
+	assert(ret >= 0);
+	ret = ld_find_library(maps, mapnum, "vdso", false, NULL, 6);
+	assert(ret < 0);
+	ret = ld_find_library(maps, mapnum, "libc", false, NULL, 6);
+	assert(ret >= 0);
+	ret = ld_find_library(maps, mapnum, "/lib/ld-linux-x86-64.so.2",
+						  true, NULL, 6);
+	assert(ret >= 0);
+	ret = ld_find_library(maps, mapnum, "/lib64/ld-linux-x86-64.so.2",
+						  false, NULL, 6);
+	assert(ret < 0);
 	ld_free_maps(maps, mapnum);
     return 0;
 }

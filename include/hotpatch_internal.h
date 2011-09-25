@@ -140,7 +140,7 @@ void ld_free_maps(struct ld_procmaps *, size_t num);
 
 /* the full path of the library needs to be given. */
 int ld_find_library(const struct ld_procmaps *, const size_t num,
-					const char *libpath,
+					const char *libpath, bool inode_match,
 					struct hotpatch_library *lib, int verbose);
 
 /* finds the address of the symbol in the library if it exists */

@@ -37,7 +37,7 @@ enum {
     PROCMAPS_PERMS_EXEC		= 0x2,
     PROCMAPS_PERMS_WRITE	= 0x4,
     PROCMAPS_PERMS_PRIVATE  = 0x8,
-	PROCMAPS_PERMS_SHARED   = 0x10,
+	PROCMAPS_PERMS_SHARED   = 0x10
 };
 
 enum {
@@ -72,7 +72,7 @@ void ld_procmaps_dump(struct ld_procmaps *pm)
     fprintf(stderr, "[%s:%d] Pathname: %s\n", __func__, __LINE__,
 			pm->pathname ? pm->pathname : "Unknown");
     fprintf(stderr, "[%s:%d] Address Start: %lx End: %lx Valid:"
-					"	%d Offset: %ld\n", __func__, __LINE__,
+					" %d Offset: %ld\n", __func__, __LINE__,
 			pm->addr_begin, pm->addr_end, pm->addr_valid, pm->offset);
     fprintf(stderr, "[%s:%d] Device Major: %d Minor: %d\n",
 			__func__, __LINE__, pm->device_major, pm->device_minor);
@@ -205,6 +205,12 @@ int ld_procmaps_parse(char *buf, size_t bufsz, struct ld_procmaps *pm,
                         if (statbuf.st_ino == inode1)
                             pm->filetype = PROCMAPS_FILETYPE_EXE;
                     }
+				} else {
+					int err = errno;
+					if (verbose > 2)
+						fprintf(stderr, "[%s:%d] Unable to stat file %s. Error:"
+								" %s\n", __func__, __LINE__, pm->pathname,
+								strerror(err));
                 }
             }
         } else if ((token = strchr(save, '['))) {
@@ -323,4 +329,141 @@ void ld_free_maps(struct ld_procmaps *maps, size_t num)
 		free(maps);
 		maps = NULL;
 	}
+}
+
+int ld_find_library(const struct ld_procmaps *maps, const size_t mapnum,
+					const char *libpath, bool inode_match,
+					struct hotpatch_library *lib, int verbose)
+{
+	if (!maps && !libpath) {
+		if (verbose > 3)
+			fprintf(stderr, "[%s:%d] Invalid arguments.\n", __func__,
+					__LINE__);
+		return -1;
+	} else {
+		size_t idx;
+		bool found = false;
+		ino_t inode = 0;
+		bool nonlib_match = false;
+		bool exact_match = false;
+		if (inode_match) {
+			struct stat statbuf = { 0 };
+			if (stat(libpath, &statbuf) < 0) {
+				int err = errno;
+				if (verbose > 1)
+					fprintf(stderr,
+							"[%s:%d] Unable to get inode for %s. Error: %s\n",
+							__func__, __LINE__, libpath, strerror(err));
+				return -1;
+			}
+			inode = statbuf.st_ino;
+		} else {
+			nonlib_match = (strchr(libpath, '[') || strchr(libpath, ']')) ?
+							true : false;
+			if (verbose > 2 && nonlib_match)
+				fprintf(stderr, "[%s:%d] Found '[' or ']' in %s\n",
+						__func__, __LINE__, libpath);
+			exact_match = (strchr(libpath, '/')) ? true : false;
+			if (verbose > 2 && exact_match)
+				fprintf(stderr, "[%s:%d] Found '/' in %s. Doing an exact "
+						"match search\n", __func__, __LINE__, libpath);
+			if (!nonlib_match && !exact_match && verbose > 0)
+				fprintf(stderr, "[%s:%d] Doing best substring search for %s.\n",
+						__func__, __LINE__, libpath);
+		}
+		for (idx = 0; idx < mapnum; ++idx) {
+			const struct ld_procmaps *pm = &maps[idx];
+			if (!pm->pathname)
+				continue;
+			/* first try inode match. the libraries can be symlinks and
+			 * all that
+			 */
+			if (inode_match) {
+				/* if it has no inode, we do not support it */
+				if (pm->inode == 0)
+					continue;
+				found = (pm->inode == inode) ? true : false;
+			} else {
+				/* Now try string match.
+				 * 1. if the string contains a '[' or ']' then do a substring
+				 * match
+				 * 2. if the string contains a '/' then do an exact match
+				 * 3. else substring search all libs and return the first one
+				 * with a valid inode
+				 */
+				if (nonlib_match) {
+					/* we're looking for a non-library or a non-exe file or a
+					 * non-data file
+					 */
+					if (pm->filetype == PROCMAPS_FILETYPE_VDSO ||
+						pm->filetype == PROCMAPS_FILETYPE_HEAP ||
+						pm->filetype == PROCMAPS_FILETYPE_STACK ||
+						pm->filetype == PROCMAPS_FILETYPE_SYSCALL) {
+						/* doing a substring match to be safe */
+						found = strstr(pm->pathname, libpath) != NULL ?
+								true :false;
+					}
+				} else {
+					if (pm->filetype != PROCMAPS_FILETYPE_LIB)
+						continue;
+					if (pm->inode == 0)
+						continue;
+					/* we're doing an exact match */
+					if (exact_match) {
+						found = strcmp(libpath, pm->pathname) == 0 ?
+								true : false;
+					} else {
+						/* do a substring match for best fit */
+						found = strstr(pm->pathname, libpath) != NULL ?
+								true : false;
+					}
+				}
+			}
+			if (found) {
+				if (verbose > 2)
+					fprintf(stderr, "[%s:%d] Found index (%ld) matching.\n",
+							__func__, __LINE__, idx);
+				if (verbose > 0)
+					fprintf(stderr, "[%s:%d] Found entry %s matching %s\n",
+							__func__, __LINE__, pm->pathname, libpath);
+				break;
+			}
+		}
+		if (!found) {
+			if (verbose > 0) {
+				fprintf(stderr, "[%s:%d] Library %s not found in procmaps\n",
+						__func__, __LINE__, libpath);
+			}
+			return -1;
+		}
+		if (found && lib) {
+			const struct ld_procmaps *pm = &maps[idx];
+			if (pm->addr_valid) {
+				lib->addr_begin = pm->addr_begin;
+				lib->addr_end = pm->addr_end;
+			} else {
+				if (verbose > 1)
+					fprintf(stderr, "[%s:%d] Addresses are invalid for %s\n",
+							__func__, __LINE__, lib->pathname);
+				return -1;
+			}
+			lib->inode = pm->inode;
+			lib->pathname = strdup(pm->pathname);
+			if (!lib->pathname) {
+				LOG_ERROR_OUT_OF_MEMORY;
+				lib->pathname = NULL;
+				lib->length = 0;
+				return -1;
+			} else {
+				lib->length = pm->pathname_sz;
+			}
+		}
+	}
+	return 0;
+}
+
+uintptr_t ld_find_address(const struct hotpatch_library *hpl, const char *symbol,
+						  int verbose)
+{
+	return 0;
 }

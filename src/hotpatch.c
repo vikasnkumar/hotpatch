@@ -264,8 +264,8 @@ int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
 						__func__, __LINE__, strerror(err));
 			} else {
 				if (hp->verbose > 0)
-					fprintf(stderr, "[%s:%d] Set RIP to 0x%lx\n", __func__, __LINE__,
-							ptr);
+					fprintf(stderr, "[%s:%d] Set RIP to 0x%lx\n", __func__,
+							__LINE__, ptr);
 				rc = 0;
 			}
 		}

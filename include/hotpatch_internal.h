@@ -120,6 +120,10 @@ struct hotpatch_is_opaque {
 	size_t ld_maps_num;
 	struct ld_library *libs;
 	size_t libs_num; /* 0th element is the loader */
+	/* addresses useful */
+	uintptr_t ld_malloc;
+	uintptr_t ld_realloc;
+	uintptr_t ld_free;
 	/* actions */
 	bool attached;
 	bool inserted;
@@ -144,4 +148,5 @@ int ld_find_library(const struct ld_procmaps *, const size_t num,
 uintptr_t ld_find_address(const struct ld_library *hpl, const char *symbol,
 						  int verbose);
 
+int elf_symbol_cmpqsort(const void *p1, const void *p2);
 #endif /* __LIBHOTPATCH_INTERNAL_H__ */

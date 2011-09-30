@@ -465,8 +465,39 @@ int ld_find_library(const struct ld_procmaps *maps, const size_t mapnum,
 	return 0;
 }
 
-uintptr_t ld_find_address(const struct ld_library *hpl, const char *symbol,
+uintptr_t ld_find_address(const struct ld_library *lib, const char *symbol,
 						  int verbose)
 {
-	return 0;
+	uintptr_t ptr = 0;
+	if (lib && symbol && lib->pathname) {
+		size_t syms_num = 0;
+		struct elf_symbol *syms = exe_load_symbols(lib->pathname, verbose,
+									&syms_num, NULL, NULL, NULL);
+		if (syms && syms_num > 0) {
+			size_t idx = 0;
+			if (verbose > 1)
+				fprintf(stderr, "[%s:%d] %ld symbols found in %s\n",
+						__func__, __LINE__, syms_num, lib->pathname);
+			qsort(syms, syms_num, sizeof(*syms), elf_symbol_cmpqsort);
+			for (idx = 0; idx < syms_num; ++idx) {
+				if (strcmp(symbol, syms[idx].name) == 0) {
+					if (verbose > 2)
+						fprintf(stderr, "[%s:%d] Found %s in symbol list at "
+								"%ld with address offset %lx\n", __func__,
+								__LINE__, symbol, idx, syms[idx].address);
+					ptr = syms[idx].address + lib->addr_begin;
+					break;
+				}
+			}
+		} else {
+			if (verbose > 0)
+				fprintf(stderr, "[%s:%d] No symbols found in %s\n",
+						__func__, __LINE__, lib->pathname);
+		}
+	} else {
+		if (verbose > 3)
+			fprintf(stderr, "[%s:%d] Invalid arguments.\n", __func__,
+					__LINE__);
+	}
+	return ptr;
 }

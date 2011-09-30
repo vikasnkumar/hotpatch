@@ -318,7 +318,7 @@ static int exe_load_section_headers(struct elf_internals *ei, int verbose)
 				ei->sechdr_num);
 	for (idx = 0; idx < ei->sechdr_num; ++idx) {
 		const char *name = &ei->strsectbl[sechdrs[idx].sh_name];
-		if (verbose > 0) {
+		if (verbose > 2) {
 			if (name)
 				fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: %ld\n",
 						__func__, __LINE__, name, (void *)sechdrs[idx].sh_offset,
@@ -465,7 +465,7 @@ static int exe_load_headers(struct elf_internals *ei, int verbose)
 	case HOTPATCH_EXE_IS_64BIT:
 		if (verbose > 3)
 			fprintf(stderr, "[%s:%d] 64-bit valid exe\n", __func__, __LINE__);
-		if (verbose > 0)
+		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Entry point %p\n", __func__, __LINE__,
 				(void *)hdr.e_entry);
 		ei->entry_point = (uintptr_t)hdr.e_entry;
@@ -574,4 +574,10 @@ struct elf_symbol *exe_load_symbols(const char *filename, int verbose,
 			*entry_point = ei.entry_point;
 	}
 	return symbols;
+}
+
+int elf_symbol_cmpqsort(const void *p1, const void *p2)
+{
+	return strcmp(((const struct elf_symbol *)p1)->name,
+				  ((const struct elf_symbol *)p2)->name);
 }

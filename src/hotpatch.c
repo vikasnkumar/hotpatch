@@ -32,10 +32,6 @@
 #include <hotpatch_internal.h>
 #include <hotpatch.h>
 
-static int hotpatch_cmpqsort(const void *p1, const void *p2)
-{
-	return strcmp(*(char * const *)p1, * (char * const *)p2);
-}
 
 hotpatch_t *hotpatch_create(pid_t pid, int verbose)
 {
@@ -83,7 +79,42 @@ hotpatch_t *hotpatch_create(pid_t pid, int verbose)
 						__func__, __LINE__, pid);
 			if (hp->exe_symbols && hp->exe_symbols_num > 0) {
 				qsort(hp->exe_symbols, hp->exe_symbols_num,
-					  sizeof(*hp->exe_symbols), hotpatch_cmpqsort);
+					  sizeof(*hp->exe_symbols), elf_symbol_cmpqsort);
+			}
+			if (hp->exe_interp.name) {
+				struct ld_library ldlib = { 0 };
+				if (verbose > 2)
+					fprintf(stderr,
+							"[%s:%d] Checking if %s exists in procmaps.\n",
+							__func__, __LINE__, hp->exe_interp.name);
+				if (ld_find_library(hp->ld_maps, hp->ld_maps_num,
+									hp->exe_interp.name, true, &ldlib,
+									verbose) < 0) {
+					fprintf(stderr, "[%s:%d] %s not mapped.\n",
+							__func__, __LINE__, hp->exe_interp.name);
+					hotpatch_destroy(hp);
+					hp = NULL;
+				} else {
+					hp->ld_malloc = ld_find_address(&ldlib, "malloc", verbose);
+					if (verbose > 0)
+						fprintf(stderr, "[%s:%d] Malloc at 0x%lx\n",
+								__func__, __LINE__, hp->ld_malloc);
+					hp->ld_free = ld_find_address(&ldlib, "free", verbose);
+					if (verbose > 0)
+						fprintf(stderr, "[%s:%d] Free at 0x%lx\n",
+								__func__, __LINE__, hp->ld_free);
+					hp->ld_realloc = ld_find_address(&ldlib, "realloc",
+													 verbose);
+					if (verbose > 0)
+						fprintf(stderr, "[%s:%d] Realloc at 0x%lx\n",
+								__func__, __LINE__, hp->ld_realloc);
+					if (!hp->ld_malloc || !hp->ld_realloc || !hp->ld_free) {
+						fprintf(stderr, "[%s:%d] The memory allocation routines"
+								" are missing.\n", __func__, __LINE__);
+						hotpatch_destroy(hp);
+						hp = NULL;
+					}
+				}
 			}
 		} else {
 			LOG_ERROR_OUT_OF_MEMORY;

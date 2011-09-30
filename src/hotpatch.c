@@ -41,25 +41,36 @@ hotpatch_t *hotpatch_create(pid_t pid, int verbose)
 {
 	hotpatch_t *hp = NULL;
 	if (pid > 0) {
+		char filename[OS_MAX_BUFFER];
+		memset(filename, 0, sizeof(filename));
+		snprintf(filename, sizeof(filename), "/proc/%d/exe", pid);
+		if (verbose > 3)
+			fprintf(stderr, "[%s:%d] Exe symlink for pid %d : %s\n", __func__,
+					__LINE__, pid, filename);
 		hp = malloc(sizeof(*hp));
 		if (hp) {
 			memset(hp, 0, sizeof(*hp));
 			hp->verbose = verbose;
 			hp->pid = pid;
 			hp->is64 = HOTPATCH_EXE_IS_NEITHER;
-			hp->fd_exe = exe_open_file(hp->pid, hp->verbose);
-			if (hp->fd_exe < 0) {
-				hotpatch_destroy(hp);
-				return NULL;
-			}
-			if (exe_load_headers(hp) >= 0) {
-				LOG_INFO_HEADERS_LOADED(verbose);
-			} else {
-				fprintf(stderr, "[%s:%d] Unable to load Exe headers.\n",
+			hp->exe_symbols = exe_load_symbols(filename, hp->verbose,
+										&hp->exe_symbols_num,
+										&hp->exe_entry_point,
+										&hp->exe_interp,
+										&hp->is64);
+			if (!hp->exe_symbols) {
+				fprintf(stderr, "[%s:%d] Unable to find any symbols in exe.\n",
 						__func__, __LINE__);
 				hotpatch_destroy(hp);
 				return NULL;
 			}
+			if (hp->exe_entry_point == 0) {
+				fprintf(stderr, "[%s:%d] Entry point is 0. Invalid.\n",
+						__func__, __LINE__);
+				hotpatch_destroy(hp);
+				return NULL;
+			}
+			LOG_INFO_HEADERS_LOADED(verbose);
 			hp->ld_maps = ld_load_maps(hp->pid, hp->verbose, &hp->ld_maps_num);
 			if (!hp->ld_maps) {
 				fprintf(stderr, "[%s:%d] Unable to load data in "
@@ -70,9 +81,9 @@ hotpatch_t *hotpatch_create(pid_t pid, int verbose)
 			if (verbose > 2)
 				fprintf(stderr, "[%s:%d] /proc/%d/maps loaded.\n",
 						__func__, __LINE__, pid);
-			if (hp->symbols && hp->symbols_num > 0) {
-				qsort(hp->symbols, hp->symbols_num,
-					  sizeof(*hp->symbols), hotpatch_cmpqsort);
+			if (hp->exe_symbols && hp->exe_symbols_num > 0) {
+				qsort(hp->exe_symbols, hp->exe_symbols_num,
+					  sizeof(*hp->exe_symbols), hotpatch_cmpqsort);
 			}
 		} else {
 			LOG_ERROR_OUT_OF_MEMORY;
@@ -88,36 +99,19 @@ void hotpatch_destroy(hotpatch_t *hp)
 	if (hp) {
 		if (hp->attached)
 			hotpatch_detach(hp);
-		if (hp->fd_exe > 0) {
-			close(hp->fd_exe);
-			hp->fd_exe = -1;
-		}
-		if (hp->symbols) {
+		if (hp->exe_symbols) {
 			size_t idx;
-			for (idx = 0; idx < hp->symbols_num; ++idx) {
-				free(hp->symbols[idx].name);
-				hp->symbols[idx].name = NULL;
+			for (idx = 0; idx < hp->exe_symbols_num; ++idx) {
+				free(hp->exe_symbols[idx].name);
+				hp->exe_symbols[idx].name = NULL;
 			}
-			free(hp->symbols);
+			free(hp->exe_symbols);
 		}
-		hp->symbols = NULL;
-		hp->symbols_num = 0;
-		hp->strsectbl_size = 0;
-		if (hp->strsectbl) {
-			free(hp->strsectbl);
-			hp->strsectbl = NULL;
-		}
-		if (hp->sechdrs) {
-			free(hp->sechdrs);
-			hp->sechdrs = NULL;
-		}
-		if (hp->interp.name) {
-			free(hp->interp.name);
-			hp->interp.name = NULL;
-		}
-		if (hp->proghdrs) {
-			free(hp->proghdrs);
-			hp->proghdrs = NULL;
+		hp->exe_symbols = NULL;
+		hp->exe_symbols_num = 0;
+		if (hp->exe_interp.name) {
+			free(hp->exe_interp.name);
+			hp->exe_interp.name = NULL;
 		}
 		if (hp->ld_maps) {
 			ld_free_maps(hp->ld_maps, hp->ld_maps_num);
@@ -133,22 +127,22 @@ uintptr_t hotpatch_read_symbol(hotpatch_t *hp, const char *symbol, int *type, si
 {
 	uintptr_t ptr = 0;
 	size_t idx = 0;
-	if (!hp || !symbol || !hp->symbols) {
+	if (!hp || !symbol || !hp->exe_symbols) {
 		if (hp->verbose > 2)
 			fprintf(stderr, "[%s:%d] Invalid arguments.\n", __func__, __LINE__);
 		return (uintptr_t)0;
 	}
-	for (idx = 0; idx < hp->symbols_num; ++idx) {
-		const char *name = hp->symbols[idx].name;
+	for (idx = 0; idx < hp->exe_symbols_num; ++idx) {
+		const char *name = hp->exe_symbols[idx].name;
 		if (strcmp(name, symbol) == 0) {
 			if (hp->verbose > 1)
 				fprintf(stderr, "[%s:%d] Found %s in symbol list at %ld\n",
 						__func__, __LINE__, symbol, idx);
-			ptr = hp->symbols[idx].address;
+			ptr = hp->exe_symbols[idx].address;
 			if (type)
-				*type = hp->symbols[idx].type;
+				*type = hp->exe_symbols[idx].type;
 			if (sz)
-				*sz = hp->symbols[idx].size;
+				*sz = hp->exe_symbols[idx].size;
 			break;
 		}
 	}
@@ -160,7 +154,7 @@ uintptr_t hotpatch_read_symbol(hotpatch_t *hp, const char *symbol, int *type, si
 
 uintptr_t hotpatch_get_entry_point(hotpatch_t *hp)
 {
-	return hp ? hp->entry_point : 0;
+	return hp ? hp->exe_entry_point : 0;
 }
 
 int hotpatch_insert(hotpatch_t *hp, const char *dll, const char *symbol,
@@ -255,7 +249,7 @@ int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
 			if (hp->verbose > 1)
 				fprintf(stderr, "[%s:%d] RIP is 0x%lx\n", __func__, __LINE__,
 						regs.regs.rip);
-			if (ptr == hp->entry_point)
+			if (ptr == hp->exe_entry_point)
 				ptr += sizeof(void *);
 			regs.regs.rip = ptr;
 			if (ptrace(PTRACE_SETREGS, hp->pid, NULL, &regs) < 0) {

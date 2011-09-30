@@ -81,58 +81,55 @@
 
 struct ld_procmaps;
 
+enum elf_bit {
+	HOTPATCH_EXE_IS_NEITHER,
+	HOTPATCH_EXE_IS_32BIT,
+	HOTPATCH_EXE_IS_64BIT
+};
+
+struct elf_symbol {
+	char *name; /* null terminated symbol name */
+	uintptr_t address; /* address at which it is available */
+	int type; /* type of symbol */
+	size_t size; /* size of the symbol if available */
+};
+
+struct elf_interp {
+	char *name;
+	size_t length;
+	uintptr_t ph_addr;
+};
+
+struct ld_library {
+	char *pathname;
+	size_t length;
+	ino_t inode;
+	uintptr_t addr_begin;
+	uintptr_t addr_end;
+};
+
 struct hotpatch_is_opaque {
 	pid_t pid;
 	int verbose;
-	enum {
-		HOTPATCH_EXE_IS_NEITHER,
-		HOTPATCH_EXE_IS_32BIT,
-		HOTPATCH_EXE_IS_64BIT
-	} is64;
-	int fd_exe;
-	off_t proghdr_offset;
-	void *proghdrs; /* program headers */
-	size_t proghdr_num;
-	size_t proghdr_size; /* total buffer size */
-	off_t sechdr_offset;
-	void *sechdrs; /* section headers */
-	size_t sechdr_num;
-	size_t sechdr_size; /* total buffer size */
-	size_t secnametbl_idx;
-	char *strsectbl; /* string table for section names */
-	size_t strsectbl_size;
-	char *exepath;
-	struct hotpatch_symbol {
-		char *name; /* null terminated symbol name */
-		uintptr_t address; /* address at which it is available */
-		int type; /* type of symbol */
-		size_t size; /* size of the symbol if available */
-	} *symbols;
-	size_t symbols_num;
-	uintptr_t entry_point;
-	struct hotpatch_loader {
-		char *name;
-		size_t length;
-		uintptr_t ph_addr;
-	} interp; /* dynamic loader from .interp */
+	enum elf_bit is64;
+	struct elf_symbol *exe_symbols;
+	size_t exe_symbols_num;
+	uintptr_t exe_entry_point;
+	struct elf_interp exe_interp; /* dynamic loader from .interp in the exe */
 	struct ld_procmaps *ld_maps;
 	size_t ld_maps_num;
-	struct hotpatch_library {
-		char *pathname;
-		size_t length;
-		ino_t inode;
-		uintptr_t addr_begin;
-		uintptr_t addr_end;
-	} *libs;
+	struct ld_library *libs;
 	size_t libs_num; /* 0th element is the loader */
 	/* actions */
 	bool attached;
 	bool inserted;
 };
 
-int exe_open_file(pid_t pid, int verbose);
-
-int exe_load_headers(struct hotpatch_is_opaque *hp);
+struct elf_symbol *exe_load_symbols(const char *filename, int verbose,
+										size_t *sym_count,
+										uintptr_t *entry_point,
+										struct elf_interp *interp,
+										enum elf_bit *is64);
 
 struct ld_procmaps *ld_load_maps(pid_t pid, int verbose, size_t *num);
 
@@ -141,10 +138,10 @@ void ld_free_maps(struct ld_procmaps *, size_t num);
 /* the full path of the library needs to be given. */
 int ld_find_library(const struct ld_procmaps *, const size_t num,
 					const char *libpath, bool inode_match,
-					struct hotpatch_library *lib, int verbose);
+					struct ld_library *lib, int verbose);
 
 /* finds the address of the symbol in the library if it exists */
-uintptr_t ld_find_address(const struct hotpatch_library *hpl, const char *symbol,
+uintptr_t ld_find_address(const struct ld_library *hpl, const char *symbol,
 						  int verbose);
 
 #endif /* __LIBHOTPATCH_INTERNAL_H__ */

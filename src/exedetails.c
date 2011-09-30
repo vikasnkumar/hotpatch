@@ -37,7 +37,31 @@ enum {
 	HOTPATCH_UNKNOWN
 };
 
-static int exe_to_hotpatch_type(int info, int group)
+struct elf_internals {
+	int fd;
+	enum elf_bit is64;
+	off_t proghdr_offset;
+	void *proghdrs; /* program headers */
+	size_t proghdr_num;
+	size_t proghdr_size; /* total buffer size */
+	off_t sechdr_offset;
+	void *sechdrs; /* section headers */
+	size_t sechdr_num;
+	size_t sechdr_size; /* total buffer size */
+	size_t secnametbl_idx;
+	char *strsectbl; /* string table for section names */
+	size_t strsectbl_size;
+	/*
+	 * stored here temporarily, should not be freed unless on failure.
+	 */
+	uintptr_t entry_point;
+	struct elf_symbol *symbols;
+	size_t symbols_num;
+	struct elf_interp interp;
+};
+
+/* each of the exe_* functions have to be reentrant and thread-safe */
+static int exe_get_hotpatch_type(int info, int group)
 {
 	if (group == HOTPATCH_SYMBOL_TYPE) {
 		int value = ELF64_ST_TYPE(info);
@@ -55,28 +79,15 @@ static int exe_to_hotpatch_type(int info, int group)
 	return -1;
 }
 
-/* each of the exe_* functions have to be reentrant and thread-safe */
-int exe_open_file(pid_t pid, int verbose)
+static int exe_open_filename(const char *filename, int verbose)
 {
 	int fd = -1;
-	if (pid > 0) {
-		char buf[OS_MAX_BUFFER];
-		memset(buf, 0, sizeof(buf));
-		snprintf(buf, sizeof(buf), "/proc/%d/exe", pid);
-		if (verbose > 3)
-			fprintf(stderr, "[%s:%d] Exe symlink for pid %d : %s\n", __func__,
-					__LINE__, pid, buf);
-		fd = open(buf, O_RDONLY);
-		if (fd < 0)
-			LOG_ERROR_FILE_OPEN(buf);
-		if (verbose > 3)
-			fprintf(stderr, "[%s:%d] Exe file descriptor: %d\n", __func__,
-					__LINE__, fd);
-	} else {
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Pid %d has no valid file descriptor.\n",
-					__func__, __LINE__, pid);
-	}
+	fd = open(filename, O_RDONLY);
+	if (fd < 0)
+		LOG_ERROR_FILE_OPEN(filename);
+	if (verbose > 3)
+		fprintf(stderr, "[%s:%d] Exe file descriptor: %d\n", __func__,
+				__LINE__, fd);
 	return fd;
 }
 
@@ -167,16 +178,16 @@ static int exe_elf_identify(unsigned char *e_ident, size_t size, int verbose)
 	return HOTPATCH_EXE_IS_NEITHER;
 }
 
-static int exe_load_symbol_table(hotpatch_t *hp, Elf64_Shdr *symh,
-								 Elf64_Shdr *strh)
+static int exe_load_symbol_table(struct elf_internals *ei, Elf64_Shdr *symh,
+								 Elf64_Shdr *strh, int verbose)
 {
 	char *strsymtbl = NULL;
 	size_t strsymtbl_size = 0;
-	while (hp && symh && strh) {
-		if (hp->verbose > 3)
+	while (ei && symh && strh) {
+		if (verbose > 3)
 			fprintf(stderr, "[%s:%d] Retrieving symbol table.\n", __func__,
 					__LINE__);
-		if (lseek(hp->fd_exe, strh->sh_offset, SEEK_SET) < 0) {
+		if (lseek(ei->fd, strh->sh_offset, SEEK_SET) < 0) {
 			LOG_ERROR_FILE_SEEK;
 			break;
 		}
@@ -186,7 +197,7 @@ static int exe_load_symbol_table(hotpatch_t *hp, Elf64_Shdr *symh,
 			LOG_ERROR_OUT_OF_MEMORY;
 			break;
 		}
-		if (read(hp->fd_exe, strsymtbl, strh->sh_size) < 0) {
+		if (read(ei->fd, strsymtbl, strh->sh_size) < 0) {
 			LOG_ERROR_FILE_READ;
 			break;
 		}
@@ -198,12 +209,12 @@ static int exe_load_symbol_table(hotpatch_t *hp, Elf64_Shdr *symh,
 				LOG_ERROR_OUT_OF_MEMORY;
 				break;
 			}
-			if (lseek(hp->fd_exe, symh->sh_offset, SEEK_SET) < 0) {
+			if (lseek(ei->fd, symh->sh_offset, SEEK_SET) < 0) {
 				LOG_ERROR_FILE_SEEK;
 				free(syms);
 				break;
 			}
-			if (read(hp->fd_exe, syms, symh->sh_size) < 0) {
+			if (read(ei->fd, syms, symh->sh_size) < 0) {
 				LOG_ERROR_FILE_READ;
 				free(syms);
 				break;
@@ -211,23 +222,23 @@ static int exe_load_symbol_table(hotpatch_t *hp, Elf64_Shdr *symh,
 			/* there might already exist symbols from another section.
 			 * hence using realloc() takes care of that.
 			 * */
-			hp->symbols = realloc(hp->symbols,
-								  (sym_num + hp->symbols_num) *
-								  sizeof(*hp->symbols));
-			if (!hp->symbols) {
+			ei->symbols = realloc(ei->symbols,
+								  (sym_num + ei->symbols_num) *
+								  sizeof(*ei->symbols));
+			if (!ei->symbols) {
 				LOG_ERROR_OUT_OF_MEMORY;
 				break;
 			}
-			memset(&hp->symbols[hp->symbols_num], 0, sizeof(*hp->symbols) * sym_num);
+			memset(&ei->symbols[ei->symbols_num], 0, sizeof(*ei->symbols) * sym_num);
 			/* index 0 is always NULL */
 			for (idx = 1; idx < sym_num; ++idx) {
 				const char *name = syms[idx].st_name > 0 ?
 					&strsymtbl[syms[idx].st_name] : "";
 				if (name) {
 					char *name2;
-					int symtype = exe_to_hotpatch_type(syms[idx].st_info,
+					int symtype = exe_get_hotpatch_type(syms[idx].st_info,
 									HOTPATCH_SYMBOL_TYPE);
-					if (hp->verbose > 1)
+					if (verbose > 1)
 						fprintf(stderr,
 							"[%s:%d] Symbol %ld is %s at %p type %d size %ld\n",
 							__func__, __LINE__, idx, name,
@@ -238,11 +249,11 @@ static int exe_load_symbol_table(hotpatch_t *hp, Elf64_Shdr *symh,
 						LOG_ERROR_OUT_OF_MEMORY;
 						continue;
 					}
-					hp->symbols[hp->symbols_num].name = name2;
-					hp->symbols[hp->symbols_num].address = (uintptr_t)syms[idx].st_value;
-					hp->symbols[hp->symbols_num].size = (size_t)syms[idx].st_size;
-					hp->symbols[hp->symbols_num].type = symtype;
-					hp->symbols_num++;
+					ei->symbols[ei->symbols_num].name = name2;
+					ei->symbols[ei->symbols_num].address = (uintptr_t)syms[idx].st_value;
+					ei->symbols[ei->symbols_num].size = (size_t)syms[idx].st_size;
+					ei->symbols[ei->symbols_num].type = symtype;
+					ei->symbols_num++;
 				}
 			}
 			free(syms);
@@ -256,7 +267,7 @@ static int exe_load_symbol_table(hotpatch_t *hp, Elf64_Shdr *symh,
 	return -1;
 }
 
-static int exe_load_section_headers(hotpatch_t *hp)
+static int exe_load_section_headers(struct elf_internals *ei, int verbose)
 {
 	Elf64_Shdr *strsectblhdr = NULL;
 	Elf64_Shdr *sechdrs = NULL;
@@ -264,50 +275,50 @@ static int exe_load_section_headers(hotpatch_t *hp)
 	ssize_t symtab = -1;
 	ssize_t strtab = -1;
 
-	if (!hp || hp->sechdr_offset == 0 || hp->sechdr_size == 0)
+	if (!ei || ei->sechdr_offset == 0 || ei->sechdr_size == 0)
 		return -1;
-	if (hp->verbose > 3)
+	if (verbose > 3)
 		fprintf(stderr, "[%s:%d] Retrieving section headers.\n", __func__,
 				__LINE__);
-	hp->sechdrs = malloc(hp->sechdr_size);
-	if (!hp->sechdrs) {
+	ei->sechdrs = malloc(ei->sechdr_size);
+	if (!ei->sechdrs) {
 		LOG_ERROR_OUT_OF_MEMORY;
 		return -1;
 	}
-	memset(hp->sechdrs, 0, hp->sechdr_size);
-	if (hp->verbose > 3)
+	memset(ei->sechdrs, 0, ei->sechdr_size);
+	if (verbose > 3)
 		fprintf(stderr, "[%s:%d] Reading section header offset at %ld\n",
-				__func__, __LINE__, hp->sechdr_offset);
-	if (lseek(hp->fd_exe, hp->sechdr_offset, SEEK_SET) < 0) {
+				__func__, __LINE__, ei->sechdr_offset);
+	if (lseek(ei->fd, ei->sechdr_offset, SEEK_SET) < 0) {
 		LOG_ERROR_FILE_SEEK;
 		return -1;
 	}
-	if (read(hp->fd_exe, hp->sechdrs, hp->sechdr_size) < 0) {
+	if (read(ei->fd, ei->sechdrs, ei->sechdr_size) < 0) {
 		LOG_ERROR_FILE_READ;
 		return -1;
 	}
-	sechdrs = (Elf64_Shdr *)hp->sechdrs;
-	strsectblhdr = &sechdrs[hp->secnametbl_idx];
-	if (lseek(hp->fd_exe, strsectblhdr->sh_offset, SEEK_SET) < 0) {
+	sechdrs = (Elf64_Shdr *)ei->sechdrs;
+	strsectblhdr = &sechdrs[ei->secnametbl_idx];
+	if (lseek(ei->fd, strsectblhdr->sh_offset, SEEK_SET) < 0) {
 		LOG_ERROR_FILE_SEEK;
 		return -1;
 	}
-	hp->strsectbl = malloc(strsectblhdr->sh_size);
-	if (!hp->strsectbl) {
+	ei->strsectbl = malloc(strsectblhdr->sh_size);
+	if (!ei->strsectbl) {
 		LOG_ERROR_OUT_OF_MEMORY;
 		return -1;
 	}
-	hp->strsectbl_size = strsectblhdr->sh_size + 0;
-	if (read(hp->fd_exe, hp->strsectbl, strsectblhdr->sh_size) < 0) {
+	ei->strsectbl_size = strsectblhdr->sh_size + 0;
+	if (read(ei->fd, ei->strsectbl, strsectblhdr->sh_size) < 0) {
 		LOG_ERROR_FILE_READ;
 		return -1;
 	}
-	if (hp->verbose > 3)
+	if (verbose > 3)
 		fprintf(stderr, "[%s:%d] Number of sections: %ld\n", __func__, __LINE__,
-				hp->sechdr_num);
-	for (idx = 0; idx < hp->sechdr_num; ++idx) {
-		const char *name = &hp->strsectbl[sechdrs[idx].sh_name];
-		if (hp->verbose > 0) {
+				ei->sechdr_num);
+	for (idx = 0; idx < ei->sechdr_num; ++idx) {
+		const char *name = &ei->strsectbl[sechdrs[idx].sh_name];
+		if (verbose > 0) {
 			if (name)
 				fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: %ld\n",
 						__func__, __LINE__, name, (void *)sechdrs[idx].sh_offset,
@@ -321,7 +332,7 @@ static int exe_load_section_headers(hotpatch_t *hp)
 		case SHT_SYMTAB:
 		case SHT_DYNSYM:
 			symtab = idx;
-			if (hp->verbose > 3)
+			if (verbose > 3)
 				fprintf(stderr, "[%s:%d] Symbol table offset: %ld size: %ld "
 						"entsize: %ld entries: %ld\n",
 				__func__, __LINE__, sechdrs[idx].sh_offset,
@@ -329,13 +340,13 @@ static int exe_load_section_headers(hotpatch_t *hp)
 				(sechdrs[idx].sh_entsize > 0 ? sechdrs[idx].sh_size / sechdrs[idx].sh_entsize : 0));
 			break;
 		case SHT_STRTAB:
-			if (idx != hp->secnametbl_idx) {
+			if (idx != ei->secnametbl_idx) {
 				strtab = idx;
-				if (hp->verbose > 2)
+				if (verbose > 2)
 					fprintf(stderr, "[%s:%d] Reading symbol table from %s\n",
 							__func__, __LINE__, name);
-				if (symtab >= 0 && exe_load_symbol_table(hp, &sechdrs[symtab],
-							&sechdrs[strtab]) < 0) {
+				if (symtab >= 0 && exe_load_symbol_table(ei, &sechdrs[symtab],
+							&sechdrs[strtab], verbose) < 0) {
 					fprintf(stderr, "[%s:%d] Failed to retrieve symbol "
 							"table.\n", __func__, __LINE__);
 				}
@@ -349,34 +360,34 @@ static int exe_load_section_headers(hotpatch_t *hp)
 	return 0;
 }
 
-static int exe_load_program_headers(hotpatch_t *hp)
+static int exe_load_program_headers(struct elf_internals *ei, int verbose)
 {
 	Elf64_Phdr *proghdrs = NULL;
 	size_t idx = 0;
 	int rc = 0;
-	if (!hp || hp->proghdr_offset == 0 || hp->proghdr_size == 0)
+	if (!ei || ei->proghdr_offset == 0 || ei->proghdr_size == 0)
 		return -1;
-	hp->proghdrs = malloc(hp->proghdr_size);
-	if (!hp->proghdrs) {
+	ei->proghdrs = malloc(ei->proghdr_size);
+	if (!ei->proghdrs) {
 		LOG_ERROR_OUT_OF_MEMORY;
 		return -1;
 	}
-	memset(hp->proghdrs, 0, hp->proghdr_size);
-	if (lseek(hp->fd_exe, hp->proghdr_offset, SEEK_SET) < 0) {
+	memset(ei->proghdrs, 0, ei->proghdr_size);
+	if (lseek(ei->fd, ei->proghdr_offset, SEEK_SET) < 0) {
 		LOG_ERROR_FILE_SEEK;
 		return -1;
 	}
-	if (read(hp->fd_exe, hp->proghdrs, hp->proghdr_size) < 0) {
+	if (read(ei->fd, ei->proghdrs, ei->proghdr_size) < 0) {
 		LOG_ERROR_FILE_READ;
 		return -1;
 	}
-	if (hp->verbose > 3)
+	if (verbose > 3)
 		fprintf(stderr, "[%s:%d] Number of segments: %ld\n", __func__, __LINE__,
-				hp->proghdr_num);
-	proghdrs = (Elf64_Phdr *)hp->proghdrs;
-	for (idx = 0; idx < hp->proghdr_num; ++idx) {
+				ei->proghdr_num);
+	proghdrs = (Elf64_Phdr *)ei->proghdrs;
+	for (idx = 0; idx < ei->proghdr_num; ++idx) {
 		rc = 0;
-		if (hp->verbose > 2) {
+		if (verbose > 2) {
 			fprintf(stderr,
 					"[%s:%d] Prog-header %ld: Type: %d "
 					"VAddr: %p PAddr: %p FileSz: %ld MemSz: %ld\n",
@@ -386,43 +397,43 @@ static int exe_load_program_headers(hotpatch_t *hp)
 					proghdrs[idx].p_filesz, proghdrs[idx].p_memsz);
 		}
 		if (proghdrs[idx].p_type == PT_INTERP) {
-			if (hp->verbose > 1)
+			if (verbose > 1)
 				fprintf(stderr, "[%s:%d] PT_INTERP section found\n", __func__,
 					__LINE__);
 			if (proghdrs[idx].p_filesz == 0)
 				continue;
-			if (lseek(hp->fd_exe, proghdrs[idx].p_offset, SEEK_SET) < 0) {
+			if (lseek(ei->fd, proghdrs[idx].p_offset, SEEK_SET) < 0) {
 				LOG_ERROR_FILE_SEEK;
 				rc = -1;
 				break;
 			}
-			if (hp->interp.name) {
-				free(hp->interp.name);
-				memset(&hp->interp, 0, sizeof(hp->interp));
+			if (ei->interp.name) {
+				free(ei->interp.name);
+				memset(&ei->interp, 0, sizeof(ei->interp));
 			}
-			hp->interp.name = malloc(proghdrs[idx].p_filesz);
-			if (!hp->interp.name) {
+			ei->interp.name = malloc(proghdrs[idx].p_filesz);
+			if (!ei->interp.name) {
 				LOG_ERROR_OUT_OF_MEMORY;
 				rc = -1;
 				break;
 			}
-			if (read(hp->fd_exe, hp->interp.name, proghdrs[idx].p_filesz) < 0) {
+			if (read(ei->fd, ei->interp.name, proghdrs[idx].p_filesz) < 0) {
 				LOG_ERROR_FILE_READ;
 				rc = -1;
 				break;
 			}
-			hp->interp.length = proghdrs[idx].p_filesz;
-			hp->interp.ph_addr = proghdrs[idx].p_vaddr;
-			if (hp->verbose > 0)
+			ei->interp.length = proghdrs[idx].p_filesz;
+			ei->interp.ph_addr = proghdrs[idx].p_vaddr;
+			if (verbose > 0)
 				fprintf(stderr, "[%s:%d] Found %s at V-Addr 0x%lx\n",
-						__func__, __LINE__, hp->interp.name,
-						hp->interp.ph_addr);
+						__func__, __LINE__, ei->interp.name,
+						ei->interp.ph_addr);
 		} else if (proghdrs[idx].p_type == PT_DYNAMIC) {
-			if (hp->verbose > 1)
+			if (verbose > 1)
 				fprintf(stderr, "[%s:%d] PT_DYNAMIC section found\n", __func__,
 					__LINE__);
 		} else if (proghdrs[idx].p_type == PT_LOAD) {
-			if (hp->verbose > 1)
+			if (verbose > 1)
 				fprintf(stderr, "[%s:%d] PT_LOAD section found\n", __func__,
 					__LINE__);
 		}
@@ -430,14 +441,14 @@ static int exe_load_program_headers(hotpatch_t *hp)
 	return rc;
 }
 
-int exe_load_headers(hotpatch_t *hp)
+static int exe_load_headers(struct elf_internals *ei, int verbose)
 {
 	Elf64_Ehdr hdr;
 	int fd = -1;
-	if (!hp) {
+	if (!ei) {
 		return -1;
 	}
-	fd = hp->fd_exe;
+	fd = ei->fd;
 	memset(&hdr, 0, sizeof(hdr));
 	if (lseek(fd, 0, SEEK_SET) < 0) {
 		LOG_ERROR_FILE_SEEK;
@@ -447,31 +458,31 @@ int exe_load_headers(hotpatch_t *hp)
 		LOG_ERROR_FILE_READ;
 		return -1;
 	}
-	if (hp->verbose > 3)
+	if (verbose > 3)
 		fprintf(stderr, "[%s:%d] Reading Elf64 header.\n", __func__, __LINE__);
-	hp->is64 = exe_elf_identify(hdr.e_ident, EI_NIDENT, hp->verbose);
-	switch (hp->is64) {
+	ei->is64 = exe_elf_identify(hdr.e_ident, EI_NIDENT, verbose);
+	switch (ei->is64) {
 	case HOTPATCH_EXE_IS_64BIT:
-		if (hp->verbose > 3)
+		if (verbose > 3)
 			fprintf(stderr, "[%s:%d] 64-bit valid exe\n", __func__, __LINE__);
-		if (hp->verbose > 0)
+		if (verbose > 0)
 			fprintf(stderr, "[%s:%d] Entry point %p\n", __func__, __LINE__,
 				(void *)hdr.e_entry);
-		hp->entry_point = (uintptr_t)hdr.e_entry;
+		ei->entry_point = (uintptr_t)hdr.e_entry;
 		if (hdr.e_machine != EM_X86_64) {
 			LOG_ERROR_UNSUPPORTED_PROCESSOR;
 			return -1;
 		}
 		if (hdr.e_shoff > 0) {
-			hp->sechdr_offset = 0 + hdr.e_shoff;
-			hp->sechdr_num = 0 + hdr.e_shnum;
-			hp->sechdr_size = 0 + hdr.e_shnum * hdr.e_shentsize;
-			hp->secnametbl_idx = 0 + hdr.e_shstrndx;
+			ei->sechdr_offset = 0 + hdr.e_shoff;
+			ei->sechdr_num = 0 + hdr.e_shnum;
+			ei->sechdr_size = 0 + hdr.e_shnum * hdr.e_shentsize;
+			ei->secnametbl_idx = 0 + hdr.e_shstrndx;
 		}
 		if (hdr.e_phoff > 0) {
-			hp->proghdr_offset = 0 + hdr.e_phoff;
-			hp->proghdr_num = 0 + hdr.e_phnum;
-			hp->proghdr_size = 0 + hdr.e_phnum * hdr.e_phentsize;
+			ei->proghdr_offset = 0 + hdr.e_phoff;
+			ei->proghdr_num = 0 + hdr.e_phnum;
+			ei->proghdr_size = 0 + hdr.e_phnum * hdr.e_phentsize;
 		}
 		break;
 	case HOTPATCH_EXE_IS_32BIT:
@@ -479,15 +490,88 @@ int exe_load_headers(hotpatch_t *hp)
 	default:
 		return -1;
 	}
-	if (exe_load_section_headers(hp) < 0) {
+	if (exe_load_section_headers(ei, verbose) < 0) {
 		fprintf(stderr, "[%s:%d] Error in loading section headers\n",
 				__func__, __LINE__);
 		return -1;
 	}
-	if (exe_load_program_headers(hp) < 0) {
+	if (exe_load_program_headers(ei, verbose) < 0) {
 		fprintf(stderr, "[%s:%d] Error in loading section headers\n",
 				__func__, __LINE__);
 		return -1;
 	}
 	return 0;
+}
+
+struct elf_symbol *exe_load_symbols(const char *filename, int verbose,
+									 size_t *symbols_num,
+									 uintptr_t *entry_point,
+									 struct elf_interp *interp,
+									 enum elf_bit *is64)
+{
+	int rc = 0;
+	struct elf_symbol *symbols = NULL;
+	struct elf_internals ei;
+	memset(&ei, 0, sizeof(ei));
+	if (entry_point)
+		*entry_point = 0;
+	ei.fd = exe_open_filename(filename, verbose);
+	if (ei.fd < 0) {
+		return NULL;
+	}
+	if ((rc = exe_load_headers(&ei, verbose)) < 0) {
+		fprintf(stderr, "[%s:%d] Unable to load Elf details for %s\n",
+				__func__, __LINE__, filename);
+	}
+	if (verbose > 3)
+		fprintf(stderr, "[%s:%d] Freeing internal structure.\n",
+				__func__, __LINE__);
+	if (ei.fd >= 0)
+		close(ei.fd);
+	ei.fd = -1;
+	ei.strsectbl_size = 0;
+	if (ei.strsectbl) {
+		free(ei.strsectbl);
+		ei.strsectbl = NULL;
+	}
+	if (ei.sechdrs) {
+		free(ei.sechdrs);
+		ei.sechdrs = NULL;
+	}
+	if (ei.proghdrs) {
+		free(ei.proghdrs);
+		ei.proghdrs = NULL;
+	}
+	if (rc < 0) {
+		if (ei.interp.name)
+			free(ei.interp.name);
+		ei.interp.name = NULL;
+		if (ei.symbols) {
+			size_t idx;
+			for (idx = 0; idx < ei.symbols_num; ++idx) {
+				free(ei.symbols[idx].name);
+				ei.symbols[idx].name = NULL;
+			}
+			free(ei.symbols);
+		}
+		ei.symbols = NULL;
+		ei.symbols_num = 0;
+	} else {
+		if (verbose > 2)
+			fprintf(stderr, "[%s:%d] Readying return values.\n",
+				__func__, __LINE__);
+		symbols = ei.symbols;
+		if (symbols_num)
+			*symbols_num = ei.symbols_num;
+		if (interp) {
+			interp->name = ei.interp.name;
+			interp->length = ei.interp.length;
+			interp->ph_addr = ei.interp.ph_addr;
+		}
+		if (is64)
+			*is64 = ei.is64;
+		if (entry_point)
+			*entry_point = ei.entry_point;
+	}
+	return symbols;
 }

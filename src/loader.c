@@ -333,7 +333,7 @@ void ld_free_maps(struct ld_procmaps *maps, size_t num)
 
 int ld_find_library(const struct ld_procmaps *maps, const size_t mapnum,
 					const char *libpath, bool inode_match,
-					struct hotpatch_library *lib, int verbose)
+					struct ld_library *lib, int verbose)
 {
 	if (!maps && !libpath) {
 		if (verbose > 3)
@@ -465,7 +465,7 @@ int ld_find_library(const struct ld_procmaps *maps, const size_t mapnum,
 	return 0;
 }
 
-uintptr_t ld_find_address(const struct hotpatch_library *hpl, const char *symbol,
+uintptr_t ld_find_address(const struct ld_library *hpl, const char *symbol,
 						  int verbose)
 {
 	return 0;

@@ -108,6 +108,14 @@ struct ld_library {
 	uintptr_t addr_end;
 };
 
+enum {
+	HOTPATCH_LIB_LD = 0,
+	HOTPATCH_LIB_C,
+	HOTPATCH_LIB_DL,
+	HOTPATCH_LIB_PTHREAD,
+	HOTPATCH_LIB_MAX
+};
+
 struct hotpatch_is_opaque {
 	pid_t pid;
 	int verbose;
@@ -118,12 +126,14 @@ struct hotpatch_is_opaque {
 	struct elf_interp exe_interp; /* dynamic loader from .interp in the exe */
 	struct ld_procmaps *ld_maps;
 	size_t ld_maps_num;
-	struct ld_library *libs;
-	size_t libs_num; /* 0th element is the loader */
+	struct ld_library libs[HOTPATCH_LIB_MAX];
 	/* addresses useful */
-	uintptr_t ld_malloc;
-	uintptr_t ld_realloc;
-	uintptr_t ld_free;
+	uintptr_t fn_malloc;
+	uintptr_t fn_realloc;
+	uintptr_t fn_free;
+	uintptr_t fn_dlopen;
+	uintptr_t fn_dlclose;
+	uintptr_t fn_dlsym;
 	/* actions */
 	bool attached;
 	bool inserted;

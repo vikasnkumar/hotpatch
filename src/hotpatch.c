@@ -32,106 +32,160 @@
 #include <hotpatch_internal.h>
 #include <hotpatch.h>
 
+#define LIB_LD "ld"
+#define LIB_C "libc"
+#define LIB_DL "libdl"
+#define LIB_PTHREAD "libpthread"
+
+static int hotpatch_gather_functions(hotpatch_t *hp)
+{
+	int verbose = 0;
+	bool ld_found = false;
+	bool c_found = false;
+	bool dl_found = false;
+	bool pthread_found = false;
+	if (!hp || !hp->libs)
+		return -1;
+	verbose = hp->verbose;
+	if (hp->ld_maps_num <= 0)
+		return -1;
+	memset(hp->libs, 0, sizeof(hp->libs));
+#undef LD_PROCMAPS_FIND_LIB
+#define LD_PROCMAPS_FIND_LIB(name,flag,index,retval) \
+do { \
+	if (verbose > 2) \
+		fprintf(stderr, "[%s:%d] Checking if %s exists in procmaps.\n",\
+			__func__, __LINE__, name);\
+	if (ld_find_library(hp->ld_maps, hp->ld_maps_num, \
+						name, flag, &hp->libs[index], verbose) < 0) { \
+		if (verbose > 0) \
+			fprintf(stderr, "[%s:%d] %s not mapped.\n", \
+					__func__, __LINE__, name); \
+		retval = false; \
+	} else { \
+		retval = true; \
+		if (verbose > 2) \
+			fprintf(stderr, "[%s:%d] Found %s\n", \
+					__func__, __LINE__, name); \
+	} \
+} while (0)
+	if (hp->exe_interp.name) {
+		LD_PROCMAPS_FIND_LIB(hp->exe_interp.name, true, HOTPATCH_LIB_LD,
+				ld_found);
+	}
+	if (!ld_found) {
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] No interpreter found. Guessing.\n",
+					__func__, __LINE__);
+		LD_PROCMAPS_FIND_LIB(LIB_LD, false, HOTPATCH_LIB_LD, ld_found);
+	}
+	LD_PROCMAPS_FIND_LIB(LIB_C, false, HOTPATCH_LIB_C, c_found);
+	LD_PROCMAPS_FIND_LIB(LIB_DL, false, HOTPATCH_LIB_DL, dl_found);
+	LD_PROCMAPS_FIND_LIB(LIB_PTHREAD, false, HOTPATCH_LIB_PTHREAD,
+			pthread_found);
+	if (ld_found) {
+		struct ld_library *lib = &hp->libs[HOTPATCH_LIB_LD];
+		hp->fn_malloc = ld_find_address(lib, "malloc", verbose);
+		if (verbose > 0)
+			fprintf(stderr, "[%s:%d] Malloc at 0x%lx\n",
+					__func__, __LINE__, hp->fn_malloc);
+		hp->fn_free = ld_find_address(lib, "free", verbose);
+		if (verbose > 0)
+			fprintf(stderr, "[%s:%d] Free at 0x%lx\n",
+					__func__, __LINE__, hp->fn_free);
+		hp->fn_realloc = ld_find_address(lib, "realloc",
+				verbose);
+		if (verbose > 0)
+			fprintf(stderr, "[%s:%d] Realloc at 0x%lx\n",
+					__func__, __LINE__, hp->fn_realloc);
+		if (!hp->fn_malloc || !hp->fn_realloc || !hp->fn_free) {
+			fprintf(stderr, "[%s:%d] The memory allocation routines"
+					" are missing in %s.\n", __func__, __LINE__,
+					hp->exe_interp.name);
+		}
+	}
+#undef LD_PROCMAPS_FIND_LIB
+	return 0;
+}
 
 hotpatch_t *hotpatch_create(pid_t pid, int verbose)
 {
+	int rc = 0;
 	hotpatch_t *hp = NULL;
-	if (pid > 0) {
+	do {
 		char filename[OS_MAX_BUFFER];
+		if (pid <= 0) {
+			LOG_ERROR_INVALID_PID(pid);
+			break;
+		}
 		memset(filename, 0, sizeof(filename));
 		snprintf(filename, sizeof(filename), "/proc/%d/exe", pid);
 		if (verbose > 3)
 			fprintf(stderr, "[%s:%d] Exe symlink for pid %d : %s\n", __func__,
 					__LINE__, pid, filename);
 		hp = malloc(sizeof(*hp));
-		if (hp) {
-			memset(hp, 0, sizeof(*hp));
-			hp->verbose = verbose;
-			hp->pid = pid;
-			hp->is64 = HOTPATCH_EXE_IS_NEITHER;
-			hp->exe_symbols = exe_load_symbols(filename, hp->verbose,
-										&hp->exe_symbols_num,
-										&hp->exe_entry_point,
-										&hp->exe_interp,
-										&hp->is64);
-			if (!hp->exe_symbols) {
-				fprintf(stderr, "[%s:%d] Unable to find any symbols in exe.\n",
-						__func__, __LINE__);
-				hotpatch_destroy(hp);
-				return NULL;
-			}
-			if (hp->exe_entry_point == 0) {
-				fprintf(stderr, "[%s:%d] Entry point is 0. Invalid.\n",
-						__func__, __LINE__);
-				hotpatch_destroy(hp);
-				return NULL;
-			}
-			LOG_INFO_HEADERS_LOADED(verbose);
-			hp->ld_maps = ld_load_maps(hp->pid, hp->verbose, &hp->ld_maps_num);
-			if (!hp->ld_maps) {
-				fprintf(stderr, "[%s:%d] Unable to load data in "
-							"/proc/%d/maps.\n", __func__, __LINE__, pid);
-				hotpatch_destroy(hp);
-				return NULL;
-			}
-			if (verbose > 2)
-				fprintf(stderr, "[%s:%d] /proc/%d/maps loaded.\n",
-						__func__, __LINE__, pid);
-			if (hp->exe_symbols && hp->exe_symbols_num > 0) {
-				qsort(hp->exe_symbols, hp->exe_symbols_num,
-					  sizeof(*hp->exe_symbols), elf_symbol_cmpqsort);
-			}
-			if (hp->exe_interp.name) {
-				struct ld_library ldlib = { 0 };
-				if (verbose > 2)
-					fprintf(stderr,
-							"[%s:%d] Checking if %s exists in procmaps.\n",
-							__func__, __LINE__, hp->exe_interp.name);
-				if (ld_find_library(hp->ld_maps, hp->ld_maps_num,
-									hp->exe_interp.name, true, &ldlib,
-									verbose) < 0) {
-					fprintf(stderr, "[%s:%d] %s not mapped.\n",
-							__func__, __LINE__, hp->exe_interp.name);
-					hotpatch_destroy(hp);
-					hp = NULL;
-				} else {
-					hp->ld_malloc = ld_find_address(&ldlib, "malloc", verbose);
-					if (verbose > 0)
-						fprintf(stderr, "[%s:%d] Malloc at 0x%lx\n",
-								__func__, __LINE__, hp->ld_malloc);
-					hp->ld_free = ld_find_address(&ldlib, "free", verbose);
-					if (verbose > 0)
-						fprintf(stderr, "[%s:%d] Free at 0x%lx\n",
-								__func__, __LINE__, hp->ld_free);
-					hp->ld_realloc = ld_find_address(&ldlib, "realloc",
-													 verbose);
-					if (verbose > 0)
-						fprintf(stderr, "[%s:%d] Realloc at 0x%lx\n",
-								__func__, __LINE__, hp->ld_realloc);
-					if (!hp->ld_malloc || !hp->ld_realloc || !hp->ld_free) {
-						fprintf(stderr, "[%s:%d] The memory allocation routines"
-								" are missing.\n", __func__, __LINE__);
-						hotpatch_destroy(hp);
-						hp = NULL;
-					}
-				}
-			}
-		} else {
+		if (!hp) {
 			LOG_ERROR_OUT_OF_MEMORY;
+			rc = -1;
+			break;
 		}
-	} else {
-		LOG_ERROR_INVALID_PID(pid);
-	}
+		memset(hp, 0, sizeof(*hp));
+		hp->verbose = verbose;
+		hp->pid = pid;
+		hp->is64 = HOTPATCH_EXE_IS_NEITHER;
+		hp->exe_symbols = exe_load_symbols(filename, hp->verbose,
+				&hp->exe_symbols_num,
+				&hp->exe_entry_point,
+				&hp->exe_interp,
+				&hp->is64);
+		if (!hp->exe_symbols) {
+			fprintf(stderr, "[%s:%d] Unable to find any symbols in exe.\n",
+					__func__, __LINE__);
+			rc = -1;
+			break;
+		}
+		if (hp->exe_entry_point == 0) {
+			fprintf(stderr, "[%s:%d] Entry point is 0. Invalid.\n",
+					__func__, __LINE__);
+			rc = -1;
+			break;
+		}
+		LOG_INFO_HEADERS_LOADED(verbose);
+		hp->ld_maps = ld_load_maps(hp->pid, hp->verbose, &hp->ld_maps_num);
+		if (!hp->ld_maps) {
+			fprintf(stderr, "[%s:%d] Unable to load data in "
+					"/proc/%d/maps.\n", __func__, __LINE__, pid);
+			rc = -1;
+			break;
+		}
+		if (verbose > 2)
+			fprintf(stderr, "[%s:%d] /proc/%d/maps loaded.\n",
+					__func__, __LINE__, pid);
+		if (hp->exe_symbols && hp->exe_symbols_num > 0) {
+			qsort(hp->exe_symbols, hp->exe_symbols_num,
+					sizeof(*hp->exe_symbols), elf_symbol_cmpqsort);
+		}
+		if (hotpatch_gather_functions(hp) < 0) {
+			fprintf(stderr, "[%s:%d] Unable to find all the functions"
+					" needed. Cannot proceed.\n", __func__, __LINE__);
+			rc = -1;
+			break;
+		}
+		if (rc < 0) {
+			hotpatch_destroy(hp);
+			hp = NULL;
+		}
+	} while (0);
 	return hp;
 }
 
 void hotpatch_destroy(hotpatch_t *hp)
 {
 	if (hp) {
+		size_t idx;
 		if (hp->attached)
 			hotpatch_detach(hp);
 		if (hp->exe_symbols) {
-			size_t idx;
 			for (idx = 0; idx < hp->exe_symbols_num; ++idx) {
 				free(hp->exe_symbols[idx].name);
 				hp->exe_symbols[idx].name = NULL;
@@ -144,6 +198,12 @@ void hotpatch_destroy(hotpatch_t *hp)
 			free(hp->exe_interp.name);
 			hp->exe_interp.name = NULL;
 		}
+		for (idx = 0; idx < HOTPATCH_LIB_MAX; ++idx) {
+				if (hp->libs[idx].pathname)
+					free(hp->libs[idx].pathname);
+				hp->libs[idx].pathname = NULL;
+		}
+		memset(hp->libs, 0, sizeof(hp->libs));
 		if (hp->ld_maps) {
 			ld_free_maps(hp->ld_maps, hp->ld_maps_num);
 			hp->ld_maps = NULL;

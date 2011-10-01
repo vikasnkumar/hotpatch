@@ -489,6 +489,14 @@ uintptr_t ld_find_address(const struct ld_library *lib, const char *symbol,
 					break;
 				}
 			}
+			/* free memory for all to avoid mem-leaks */
+			for (idx = 0; idx < syms_num; ++idx) {
+				if (syms[idx].name)
+					free(syms[idx].name);
+				syms[idx].name = NULL;
+			}
+			free(syms);
+			syms_num = 0;
 		} else {
 			if (verbose > 0)
 				fprintf(stderr, "[%s:%d] No symbols found in %s\n",

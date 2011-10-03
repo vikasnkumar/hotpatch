@@ -424,7 +424,7 @@ static int exe_load_program_headers(struct elf_internals *ei, int verbose)
 			}
 			ei->interp.length = proghdrs[idx].p_filesz;
 			ei->interp.ph_addr = proghdrs[idx].p_vaddr;
-			if (verbose > 0)
+			if (verbose > 1)
 				fprintf(stderr, "[%s:%d] Found %s at V-Addr 0x%lx\n",
 						__func__, __LINE__, ei->interp.name,
 						ei->interp.ph_addr);

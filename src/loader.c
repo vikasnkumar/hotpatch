@@ -416,9 +416,17 @@ int ld_find_library(const struct ld_procmaps *maps, const size_t mapnum,
 						found = strcmp(libpath, pm->pathname) == 0 ?
 								true : false;
 					} else {
-						/* do a substring match for best fit */
-						found = strstr(pm->pathname, libpath) != NULL ?
-								true : false;
+						/* do a substring match for best fit. If the string
+						 * matches then check if the next character is not an
+						 * alphabet and is a . or a -
+						 */
+						char *sub = strstr(pm->pathname, libpath);
+						found = false;
+						if (sub) {
+							size_t alen = strlen(libpath);
+							if (sub[alen] == '.' || sub[alen] == '-')
+								found = true;
+						}
 					}
 				}
 			}

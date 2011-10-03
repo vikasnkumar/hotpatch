@@ -69,6 +69,21 @@ do { \
 					__func__, __LINE__, name); \
 	} \
 } while (0)
+#undef LD_LIB_FIND_FN_ADDR
+#define LD_LIB_FIND_FN_ADDR(fn,outfn,index) \
+do { \
+	if (outfn) break; \
+	outfn = ld_find_address(&hp->libs[HOTPATCH_##index], fn, verbose); \
+	if (outfn != 0) { \
+		if (verbose > 0) \
+			fprintf(stderr, "[%s:%d] Found %s at 0x%lx in %s\n", \
+					__func__, __LINE__, fn, outfn, index); \
+	} else { \
+		if (verbose > 0) \
+			fprintf(stderr, "[%s:%d] %s not found in %s.\n", \
+					__func__, __LINE__, fn, index); \
+	} \
+} while (0)
 	if (hp->exe_interp.name) {
 		LD_PROCMAPS_FIND_LIB(hp->exe_interp.name, true, HOTPATCH_LIB_LD,
 				ld_found);
@@ -83,28 +98,23 @@ do { \
 	LD_PROCMAPS_FIND_LIB(LIB_DL, false, HOTPATCH_LIB_DL, dl_found);
 	LD_PROCMAPS_FIND_LIB(LIB_PTHREAD, false, HOTPATCH_LIB_PTHREAD,
 			pthread_found);
+	if (c_found) {
+		LD_LIB_FIND_FN_ADDR("malloc", hp->fn_malloc, LIB_C);
+		LD_LIB_FIND_FN_ADDR("realloc", hp->fn_realloc, LIB_C);
+		LD_LIB_FIND_FN_ADDR("free", hp->fn_free, LIB_C);
+	}
 	if (ld_found) {
-		struct ld_library *lib = &hp->libs[HOTPATCH_LIB_LD];
-		hp->fn_malloc = ld_find_address(lib, "malloc", verbose);
-		if (verbose > 0)
-			fprintf(stderr, "[%s:%d] Malloc at 0x%lx\n",
-					__func__, __LINE__, hp->fn_malloc);
-		hp->fn_free = ld_find_address(lib, "free", verbose);
-		if (verbose > 0)
-			fprintf(stderr, "[%s:%d] Free at 0x%lx\n",
-					__func__, __LINE__, hp->fn_free);
-		hp->fn_realloc = ld_find_address(lib, "realloc",
-				verbose);
-		if (verbose > 0)
-			fprintf(stderr, "[%s:%d] Realloc at 0x%lx\n",
-					__func__, __LINE__, hp->fn_realloc);
-		if (!hp->fn_malloc || !hp->fn_realloc || !hp->fn_free) {
-			fprintf(stderr, "[%s:%d] The memory allocation routines"
-					" are missing in %s.\n", __func__, __LINE__,
-					hp->exe_interp.name);
-		}
+		LD_LIB_FIND_FN_ADDR("malloc", hp->fn_malloc, LIB_LD);
+		LD_LIB_FIND_FN_ADDR("realloc", hp->fn_realloc, LIB_LD);
+		LD_LIB_FIND_FN_ADDR("free", hp->fn_free, LIB_LD);
+	}
+	if (!hp->fn_malloc || !hp->fn_realloc || !hp->fn_free) {
+			fprintf(stderr, "[%s:%d] Some memory allocation routines are"
+					" unavailable. Cannot proceed.\n", __func__, __LINE__);
+			return -1;
 	}
 #undef LD_PROCMAPS_FIND_LIB
+#undef LD_LIB_FIND_FN_ADDR
 	return 0;
 }
 

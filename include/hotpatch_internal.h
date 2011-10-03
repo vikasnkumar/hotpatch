@@ -134,6 +134,7 @@ struct hotpatch_is_opaque {
 	uintptr_t fn_dlopen;
 	uintptr_t fn_dlclose;
 	uintptr_t fn_dlsym;
+	uintptr_t fn_pthread_create;
 	/* actions */
 	bool attached;
 	bool inserted;

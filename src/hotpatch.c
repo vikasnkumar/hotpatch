@@ -109,9 +109,36 @@ do { \
 		LD_LIB_FIND_FN_ADDR("free", hp->fn_free, LIB_LD);
 	}
 	if (!hp->fn_malloc || !hp->fn_realloc || !hp->fn_free) {
+		if (verbose > 0)
 			fprintf(stderr, "[%s:%d] Some memory allocation routines are"
 					" unavailable. Cannot proceed.\n", __func__, __LINE__);
-			return -1;
+		return -1;
+	}
+	if (dl_found) {
+		LD_LIB_FIND_FN_ADDR("dlopen", hp->fn_dlopen, LIB_DL);
+		LD_LIB_FIND_FN_ADDR("dlclose", hp->fn_dlclose, LIB_DL);
+		LD_LIB_FIND_FN_ADDR("dlsym", hp->fn_dlsym, LIB_DL);
+	} else {
+		LD_LIB_FIND_FN_ADDR("__libc_dlopen_mode", hp->fn_dlopen, LIB_C);
+		LD_LIB_FIND_FN_ADDR("__libc_dlclose", hp->fn_dlclose, LIB_C);
+		LD_LIB_FIND_FN_ADDR("__libc_dlsym", hp->fn_dlsym, LIB_C);
+	}
+	if (!hp->fn_dlopen || !hp->fn_dlsym) {
+		if (verbose > 0)
+			fprintf(stderr, "[%s:%d] Dynamic Library loading routines were not"
+					" found. Cannot proceed.\n", __func__, __LINE__);
+		return -1;
+	}
+	if (pthread_found) {
+		LD_LIB_FIND_FN_ADDR("pthread_create", hp->fn_pthread_create,
+							LIB_PTHREAD);
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Pthread's symbol found. Do not need more"
+					" magic.\n", __func__, __LINE__);
+	} else {
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Pthread's symbol not found. Will need some"
+					" magic.\n", __func__, __LINE__);
 	}
 #undef LD_PROCMAPS_FIND_LIB
 #undef LD_LIB_FIND_FN_ADDR

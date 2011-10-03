@@ -100,11 +100,16 @@ int hotpatch_set_execution_pointer(hotpatch_t *, uintptr_t location);
 int hotpatch_inject_code_at(hotpatch_t *, uintptr_t location,
 				const unsigned char *code, size_t len, int8_t execute);
 /*
- * Inject a shared object into the process and invoke the given symbol with
- * arguments
+ * Inject a shared object into the process and invoke the given symbol without
+ * arguments. No thread will be created by hotpatch.
+ * If the symbol is NULL, then _init() is expected to be in the library.
  */
-int hotpatch_insert(hotpatch_t *hotpatch, const char *dll, const char *symbol, void *arg);
-
+int hotpatch_inject_library(hotpatch_t *, const char *dll, const char *symbol);
+/*
+ * If the target process has linked with pthread, then create a thread using
+ * that. Load the dll using dlopen and get the symbol accordingly.
+ */
+int hotpatch_create_pthread(hotpatch_t *, const char *dll, const char *symbol);
 #ifdef __cplusplus
 } /* end of extern C */
 #endif /* __cplusplus */

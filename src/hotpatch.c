@@ -132,13 +132,18 @@ do { \
 	if (pthread_found) {
 		LD_LIB_FIND_FN_ADDR("pthread_create", hp->fn_pthread_create,
 							LIB_PTHREAD);
-		if (verbose > 1)
+		LD_LIB_FIND_FN_ADDR("pthread_detach", hp->fn_pthread_detach,
+							LIB_PTHREAD);
+	} else {
+		hp->fn_pthread_create = hp->fn_pthread_detach = 0;
+	}
+	if (verbose > 1) {
+		if (hp->fn_pthread_create && hp->fn_pthread_detach)
 			fprintf(stderr, "[%s:%d] Pthread's symbol found. Do not need more"
 					" magic.\n", __func__, __LINE__);
-	} else {
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Pthread's symbol not found. Will need some"
-					" magic.\n", __func__, __LINE__);
+		else
+			fprintf(stderr, "[%s:%d] Pthread's symbol not found. Will disable"
+					" pthread usage in injection.\n", __func__, __LINE__);
 	}
 #undef LD_PROCMAPS_FIND_LIB
 #undef LD_LIB_FIND_FN_ADDR
@@ -285,15 +290,6 @@ uintptr_t hotpatch_get_entry_point(hotpatch_t *hp)
 	return hp ? hp->exe_entry_point : 0;
 }
 
-int hotpatch_insert(hotpatch_t *hp, const char *dll, const char *symbol,
-				void *arg)
-{
-	if (!hp) {
-		return -1;
-	}
-	return 0;
-}
-
 size_t hotpatch_strnlen(const char *str, size_t maxlen)
 {
     size_t len = 0;
@@ -425,4 +421,14 @@ int hotpatch_inject_code_at(hotpatch_t *hp, uintptr_t location,
 		}
 	}
 	return rc;
+}
+
+int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
+{
+	return -1;
+}
+
+int hotpatch_create_pthread(hotpatch_t *hp, const char *dll, const char *symbol)
+{
+	return -1;
 }

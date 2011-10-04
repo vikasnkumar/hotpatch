@@ -32,7 +32,28 @@ project(hotpatch)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
+foreach (ASM_VAR call32 call64)
+	set(ASM_F ${CMAKE_CURRENT_SOURCE_DIR}/${ASM_VAR}.s)
+	set(ASM_F_OBJ ${CMAKE_CURRENT_BINARY_DIR}/${ASM_VAR}.o)
+	set(ASM_F_HDR ${CMAKE_CURRENT_BINARY_DIR}/${ASM_VAR}.h)
+	set(ASM_F_VAR hotpatch_${ASM_VAR})
+	set(ASM2HDR ${CMAKE_CURRENT_SOURCE_DIR}/asm2hdr.pl)
+	if (HOTPATCH_ASM AND PERL_FOUND)
+		add_custom_command(OUTPUT ${ASM_F_HDR}
+			COMMAND ${HOTPATCH_ASM} ARGS ${ASM_F} -o ${ASM_F_OBJ}
+			COMMAND ${PERL_EXECUTABLE} ARGS ${ASM2HDR} ${ASM_F_OBJ}
+			${ASM_F_HDR} ${ASM_F_VAR}
+			DEPENDS ${ASM_F} ${ASM2HDR}
+			WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+		set(ASM_HEADERS ${ASM_HEADERS} ${ASM_F_HDR})
+	else (HOTPATCH_ASM AND PERL_FOUND)
+		message(FATAL_ERROR "You need Perl for this")
+	endif (HOTPATCH_ASM AND PERL_FOUND)
+endforeach (ASM_VAR call32 call64)
+add_custom_target(asm_header DEPENDS ${ASM_HEADERS})
+
 add_library(hotpatch SHARED hotpatch.c exedetails.c loader.c)
+add_dependencies(hotpatch asm_header)
 target_link_libraries(hotpatch ${HOTPATCH_DEP_LIBS})
 install(TARGETS hotpatch LIBRARY DESTINATION lib)
 

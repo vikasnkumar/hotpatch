@@ -31,6 +31,8 @@
 #include <hotpatch_config.h>
 #include <hotpatch_internal.h>
 #include <hotpatch.h>
+#include <call32.h>
+#include <call64.h>
 
 #define LIB_LD "ld"
 #define LIB_C "libc"

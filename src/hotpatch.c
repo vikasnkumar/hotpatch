@@ -509,9 +509,10 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 	const unsigned char *code = NULL;
 	int rc = 0;
 	struct user oregs;
-	if (!dll || !hp) {
+	if (!dll || !hp)
 		return -1;
-	}
+	if (!hp->fn_malloc || !hp->fn_dlopen)
+		return -1;
 	/* calculate the size to allocate */
 	dllsz = strlen(dll) + 1;
 	tgtsz = (dllsz > 1024) ? dllsz : 1024;
@@ -547,6 +548,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 			break;
 		iregs.regs.rip = caddr + sizeof(void *);
 		iregs.regs.rdi = tgtsz; /* allocate the size here */
+		iregs.regs.rbx = hp->fn_malloc;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Setting registers.\n", __func__, __LINE__);
 		if ((rc = hp_set_regs(hp->pid, &iregs)) < 0)
@@ -565,13 +567,15 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 			break;
 		daddr = iregs.regs.rax;
 		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Copying data.\n", __func__, __LINE__);
+			fprintf(stderr, "[%s:%d] Copying data to 0x%lx.\n", __func__,
+					__LINE__, daddr);
 		if ((rc = hp_remote_write(hp->pid, daddr,
 								(const unsigned char *)dll, dllsz, tgtsz)) < 0)
 			break;
 		iregs.regs.rip = caddr + sizeof(void *);
 		iregs.regs.rsi = RTLD_LAZY | RTLD_GLOBAL;
 		iregs.regs.rdi = daddr;
+		iregs.regs.rbx = hp->fn_dlopen;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Setting registers.\n", __func__, __LINE__);
 		if ((rc = hp_set_regs(hp->pid, &iregs)) < 0)

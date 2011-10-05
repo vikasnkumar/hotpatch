@@ -475,8 +475,20 @@ static int hp_set_regs(pid_t pid, const struct user *regs)
 static int hp_remote_write(pid_t pid, uintptr_t target,
 		const unsigned char *code, size_t codesz, size_t maxsz)
 {
-	return -1;
+	int idx = 0;
+	for (idx = 0; idx < codesz; idx += sizeof(size_t)) {
+		if (ptrace(PTRACE_POKETEXT, pid, target + idx,
+					*(size_t *)&code[idx]) < 0) {
+			int err = errno;
+			fprintf(stderr,
+				"[%s:%d] Ptrace PokeText for PID %d failed with error: %s\n",
+				__func__, __LINE__, pid, strerror(err));
+			return -1;
+		}
+	}
+	return 0;
 }
+
 int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 {
 	size_t dllsz = 0;

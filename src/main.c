@@ -156,6 +156,8 @@ int main(int argc, char **argv)
 		printf("Symbol %s found at 0x%lx\n", opts.symbol, ptr);
 		if (opts.dryrun)
 			break;
+		rc = hotpatch_inject_library(hp, "libm.so", NULL);
+		/*
 		rc = hotpatch_attach(hp);
 		if (rc < 0) {
 			printf("Failed to attach to process. Cannot proceed\n");
@@ -166,8 +168,9 @@ int main(int argc, char **argv)
 			printf("Failed to set execution pointer to 0x%lx\n", ptr);
 			break;
 		}
+		*/
 	} while (0);
-	rc = hotpatch_detach(hp);
+/*	rc = hotpatch_detach(hp);*/
 	hotpatch_destroy(hp);
 	hp = NULL;
 	if (opts.symbol)

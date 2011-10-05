@@ -402,32 +402,185 @@ int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
 	return rc;
 }
 
-int hotpatch_inject_code_at(hotpatch_t *hp, uintptr_t location,
-				const unsigned char *code, size_t len, int8_t execute)
+static int hp_attach(pid_t pid)
 {
-	int rc = -1;
-	if (location && hp && hp->attached && code && len > 0) {
-
-	} else {
-		if (!location) {
-			fprintf(stderr, "[%s:%d] The location pointer is null.\n",
-					__func__, __LINE__);
-		}
-		if (!hp || !hp->attached) {
-			fprintf(stderr, "[%s:%d] The process is not attached to.\n",
-					__func__, __LINE__);
-		}
-		if (!code || len == 0) {
-			fprintf(stderr, "[%s:%d] No code specified for injection.\n",
-					__func__, __LINE__);
-		}
+	if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) < 0) {
+		int err = errno;
+		fprintf(stderr,
+				"[%s:%d] Ptrace Attach for PID %d failed with error: %s\n",
+				__func__, __LINE__, pid, strerror(err));
+		return -1;
 	}
-	return rc;
+	return 0;
 }
 
-int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
+static int hp_detach(pid_t pid)
+{
+	if (ptrace(PTRACE_DETACH, pid, NULL, NULL) < 0) {
+		int err = errno;
+		fprintf(stderr,
+				"[%s:%d] Ptrace Detach for PID %d failed with error: %s\n",
+				__func__, __LINE__, pid, strerror(err));
+		return -1;
+	}
+	return 0;
+}
+
+static int hp_exec_wait(pid_t pid)
+{
+	int status = 0;
+	if (waitpid(pid, &status, 0) < 0) {
+		int err = errno;
+		fprintf(stderr, "[%s:%d] Waitpid for PID %d failed with error: %s\n",
+				__func__, __LINE__, pid, strerror(err));
+		return -1;
+	}
+	if (WIFEXITED(status) || WIFSIGNALED(status)) {
+		fprintf(stderr, "[%s:%d] PID %d was terminated.\n",
+				__func__, __LINE__, pid);
+		return -1;
+	}
+	return 0;
+}
+
+static int hp_get_regs(pid_t pid, struct user *regs)
+{
+	if (!regs)
+		return -1;
+	memset(regs, 0, sizeof(*regs));
+	if (ptrace(PTRACE_GETREGS, pid, NULL, regs) < 0) {
+		int err = errno;
+		fprintf(stderr,
+				"[%s:%d] Ptrace Getregs for PID %d failed with error: %s\n",
+				__func__, __LINE__, pid, strerror(err));
+		return -1;
+	}
+	return 0;
+}
+
+static int hp_set_regs(pid_t pid, const struct user *regs)
+{
+	if (!regs)
+		return -1;
+	if (ptrace(PTRACE_SETREGS, pid, NULL, regs) < 0) {
+		int err = errno;
+		fprintf(stderr,
+				"[%s:%d] Ptrace Setregs for PID %d failed with error: %s\n",
+				__func__, __LINE__, pid, strerror(err));
+		return -1;
+	}
+	return 0;
+}
+
+static int hp_remote_write(pid_t pid, uintptr_t target,
+		const unsigned char *code, size_t codesz, size_t maxsz)
 {
 	return -1;
+}
+int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
+{
+	size_t dllsz = 0;
+	size_t tgtsz = 0;
+	size_t codesz = 0;
+	const unsigned char *code = NULL;
+	int rc = 0;
+	if (!dll || !hp) {
+		return -1;
+	}
+	/* calculate the size to allocate */
+	dllsz = strlen(dll) + 1;
+	tgtsz = (dllsz > 1024) ? dllsz : 1024;
+	tgtsz += (tgtsz % sizeof(void *) == 0) ? 0 :
+			 (sizeof(void *) - (tgtsz % sizeof(void *)));
+	if (hp->verbose > 0)
+		fprintf(stderr, "[%s:%d] Allocating %ld bytes in the target.\n",
+				__func__, __LINE__, tgtsz);
+	codesz = sizeof(hotpatch_call64) / sizeof(unsigned char);
+	code = hotpatch_call64;
+	do {
+		struct user oregs, iregs;
+		int verbose = hp->verbose;
+		uintptr_t caddr = hp->exe_entry_point;
+		uintptr_t daddr = 0;
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Attaching to PID %d\n", __func__,
+					__LINE__, hp->pid);
+		if ((rc = hp_attach(hp->pid)) < 0)
+			break;
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Waiting...\n", __func__, __LINE__);
+		if ((rc = hp_exec_wait(hp->pid)) < 0)
+			break;
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Getting registers.\n", __func__, __LINE__);
+		if ((rc = hp_get_regs(hp->pid, &oregs)) < 0)
+			break;
+		memcpy(&iregs, &oregs, sizeof(oregs));
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Copying code.\n", __func__, __LINE__);
+		if ((rc = hp_remote_write(hp->pid, caddr, code, codesz, codesz)) < 0)
+			break;
+		iregs.regs.rip = caddr + sizeof(void *);
+		iregs.regs.rdi = tgtsz; /* allocate the size here */
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Setting registers.\n", __func__, __LINE__);
+		if ((rc = hp_set_regs(hp->pid, &iregs)) < 0)
+			break;
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Waiting...\n", __func__, __LINE__);
+		if ((rc = hp_exec_wait(hp->pid)) < 0)
+			break;
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Getting registers.\n", __func__, __LINE__);
+		if ((rc = hp_get_regs(hp->pid, &iregs)) < 0)
+			break;
+		daddr = iregs.regs.rax;
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Copying data.\n", __func__, __LINE__);
+		if ((rc = hp_remote_write(hp->pid, daddr,
+								(const unsigned char *)dll, dllsz, tgtsz)) < 0)
+			break;
+		iregs.regs.rip = caddr + sizeof(void *);
+		iregs.regs.rsi = RTLD_LAZY | RTLD_GLOBAL;
+		iregs.regs.rdi = daddr;
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Setting registers.\n", __func__, __LINE__);
+		if ((rc = hp_set_regs(hp->pid, &iregs)) < 0)
+			break;
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Waiting...\n", __func__, __LINE__);
+		if ((rc = hp_exec_wait(hp->pid)) < 0)
+			break;
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Getting registers.\n", __func__, __LINE__);
+		if ((rc = hp_get_regs(hp->pid, &iregs)) < 0)
+			break;
+		daddr = iregs.regs.rax;
+		fprintf(stderr, "[%s:%d] Dll opened 0x%lx\n", __func__, __LINE__,
+				daddr);
+	} while (0);
+	if (hp->verbose > 1)
+		fprintf(stderr, "[%s:%d] Detaching from PID %d\n", __func__,
+				__LINE__, hp->pid);
+	if (hp_detach(hp->pid) < 0) {
+		if (hp->verbose > 0)
+			fprintf(stderr, "[%s:%d] Error detaching from PID %d\n", __func__,
+					__LINE__, hp->pid);
+		rc = -1;
+	}
+	/* copy code for allocation */
+	/* get return address of allocation */
+	/* copy data to the address */
+	/* copy code for dlopen */
+	/* call dlopen with allocated address */
+	/* get return address of dll */
+	/* copy code for allocation */
+	/* get return address of allocation */
+	/* copy data to address */
+	/* copy code for dlsym */
+	/* call dlsym */
+	/* call symbol */
+	return rc;
 }
 
 int hotpatch_create_pthread(hotpatch_t *hp, const char *dll, const char *symbol)

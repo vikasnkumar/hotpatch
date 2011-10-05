@@ -3,8 +3,6 @@ BITS 32
 ; arguments at max, we will only push 2 registers. The return value will be
 ; taken from EAX;
 ; the function pointer is placed in EBX followed by a triggered breakpoint.
-nop
-nop
 push esi
 push edi
 call [ebx]

@@ -487,10 +487,15 @@ static int hp_set_regs(pid_t pid, const struct user *regs)
 static int hp_remote_write(pid_t pid, uintptr_t target,
 		const unsigned char *code, size_t codesz, size_t maxsz)
 {
-	int idx = 0;
-	for (idx = 0; idx < codesz; idx += sizeof(size_t)) {
-		if (ptrace(PTRACE_POKETEXT, pid, target + idx,
-					*(size_t *)&code[idx]) < 0) {
+	size_t pos = 0;
+	while (pos < codesz) {
+		size_t pokedata = 0, jdx = 0;
+		memset(&pokedata, 0x90, sizeof(pokedata));
+		for (jdx = 0; jdx < sizeof(size_t) && pos < codesz; ++jdx)
+			((unsigned char *)&pokedata)[sizeof(size_t) - 1 - jdx] = code[pos++];
+		fprintf(stderr, "[%s:%d] Pokedata: %p\n", __func__, __LINE__, (void *)pokedata);
+		/* FIXME: fix the target address to handle more than 8 bytes */
+		if (ptrace(PTRACE_POKETEXT, pid, target, pokedata) < 0) {
 			int err = errno;
 			fprintf(stderr,
 				"[%s:%d] Ptrace PokeText for PID %d failed with error: %s\n",
@@ -526,7 +531,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 	do {
 		struct user iregs;
 		int verbose = hp->verbose;
-		uintptr_t caddr = hp->exe_entry_point;
+		uintptr_t caddr = hp->exe_entry_point + sizeof(void *);
 		uintptr_t daddr = 0;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Attaching to PID %d\n", __func__,
@@ -546,9 +551,12 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 			fprintf(stderr, "[%s:%d] Copying code.\n", __func__, __LINE__);
 		if ((rc = hp_remote_write(hp->pid, caddr, code, codesz, codesz)) < 0)
 			break;
-		iregs.regs.rip = caddr + sizeof(void *);
+		/* FIXME: this doesn't work here */
+		iregs.regs.rip = caddr;
+		iregs.regs.rsi = 0;
 		iregs.regs.rdi = tgtsz; /* allocate the size here */
 		iregs.regs.rbx = hp->fn_malloc;
+		iregs.regs.rax = 0;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Setting registers.\n", __func__, __LINE__);
 		if ((rc = hp_set_regs(hp->pid, &iregs)) < 0)
@@ -569,6 +577,8 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying data to 0x%lx.\n", __func__,
 					__LINE__, daddr);
+		if (!daddr)
+			break;
 		if ((rc = hp_remote_write(hp->pid, daddr,
 								(const unsigned char *)dll, dllsz, tgtsz)) < 0)
 			break;
@@ -576,6 +586,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 		iregs.regs.rsi = RTLD_LAZY | RTLD_GLOBAL;
 		iregs.regs.rdi = daddr;
 		iregs.regs.rbx = hp->fn_dlopen;
+		iregs.regs.rax = 0;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Setting registers.\n", __func__, __LINE__);
 		if ((rc = hp_set_regs(hp->pid, &iregs)) < 0)

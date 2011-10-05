@@ -238,7 +238,7 @@ static int exe_load_symbol_table(struct elf_internals *ei, Elf64_Shdr *symh,
 					char *name2;
 					int symtype = exe_get_hotpatch_type(syms[idx].st_info,
 									HOTPATCH_SYMBOL_TYPE);
-					if (verbose > 1)
+					if (verbose > 2)
 						fprintf(stderr,
 							"[%s:%d] Symbol %ld is %s at %p type %d size %ld\n",
 							__func__, __LINE__, idx, name,

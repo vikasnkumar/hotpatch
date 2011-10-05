@@ -426,7 +426,19 @@ static int hp_detach(pid_t pid)
 	return 0;
 }
 
-static int hp_exec_wait(pid_t pid)
+static int hp_exec(pid_t pid)
+{
+	if (ptrace(PTRACE_CONT, pid, NULL, NULL) < 0) {
+		int err = errno;
+		fprintf(stderr,
+				"[%s:%d] Ptrace Continue for PID %d failed with error: %s\n",
+				__func__, __LINE__, pid, strerror(err));
+		return -1;
+	}
+	return 0;
+}
+
+static int hp_wait(pid_t pid)
 {
 	int status = 0;
 	if (waitpid(pid, &status, 0) < 0) {
@@ -496,6 +508,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 	size_t codesz = 0;
 	const unsigned char *code = NULL;
 	int rc = 0;
+	struct user oregs;
 	if (!dll || !hp) {
 		return -1;
 	}
@@ -510,7 +523,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 	codesz = sizeof(hotpatch_call64) / sizeof(unsigned char);
 	code = hotpatch_call64;
 	do {
-		struct user oregs, iregs;
+		struct user iregs;
 		int verbose = hp->verbose;
 		uintptr_t caddr = hp->exe_entry_point;
 		uintptr_t daddr = 0;
@@ -521,7 +534,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 			break;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Waiting...\n", __func__, __LINE__);
-		if ((rc = hp_exec_wait(hp->pid)) < 0)
+		if ((rc = hp_wait(hp->pid)) < 0)
 			break;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Getting registers.\n", __func__, __LINE__);
@@ -539,8 +552,12 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 		if ((rc = hp_set_regs(hp->pid, &iregs)) < 0)
 			break;
 		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Executing...\n", __func__, __LINE__);
+		if ((rc = hp_exec(hp->pid)) < 0)
+			break;
+		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Waiting...\n", __func__, __LINE__);
-		if ((rc = hp_exec_wait(hp->pid)) < 0)
+		if ((rc = hp_wait(hp->pid)) < 0)
 			break;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Getting registers.\n", __func__, __LINE__);
@@ -560,8 +577,12 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 		if ((rc = hp_set_regs(hp->pid, &iregs)) < 0)
 			break;
 		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Executing...\n", __func__, __LINE__);
+		if ((rc = hp_exec(hp->pid)) < 0)
+			break;
+		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Waiting...\n", __func__, __LINE__);
-		if ((rc = hp_exec_wait(hp->pid)) < 0)
+		if ((rc = hp_wait(hp->pid)) < 0)
 			break;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Getting registers.\n", __func__, __LINE__);
@@ -574,6 +595,10 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 	if (hp->verbose > 1)
 		fprintf(stderr, "[%s:%d] Detaching from PID %d\n", __func__,
 				__LINE__, hp->pid);
+	if ((rc = hp_set_regs(hp->pid, &oregs)) < 0) {
+		fprintf(stderr, "[%s:%d] PID %d will be unstable.\n", __func__,
+				__LINE__, hp->pid);
+	}
 	if (hp_detach(hp->pid) < 0) {
 		if (hp->verbose > 0)
 			fprintf(stderr, "[%s:%d] Error detaching from PID %d\n", __func__,

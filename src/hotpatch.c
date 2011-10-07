@@ -484,35 +484,40 @@ static int hp_set_regs(pid_t pid, const struct user *regs)
 	return 0;
 }
 
-static int hp_remote_write(pid_t pid, uintptr_t target,
-		const unsigned char *code, size_t codesz, size_t maxsz)
+static int hp_copydata(pid_t pid, uintptr_t target,
+		const unsigned char *data, size_t datasz, int verbose)
 {
 	size_t pos = 0;
-	while (pos < codesz) {
+	size_t idx = 0;
+	while (pos < datasz) {
 		size_t pokedata = 0, jdx = 0;
-		memset(&pokedata, 0x90, sizeof(pokedata));
-		for (jdx = 0; jdx < sizeof(size_t) && pos < codesz; ++jdx)
-			((unsigned char *)&pokedata)[sizeof(size_t) - 1 - jdx] = code[pos++];
-		fprintf(stderr, "[%s:%d] Pokedata: %p\n", __func__, __LINE__,
+		const size_t pksz = sizeof(size_t);
+		for (jdx = 0; jdx < pksz && pos < datasz; ++jdx)
+			((unsigned char *)&pokedata)[jdx] = data[pos++];
+		if (verbose > 2)
+			fprintf(stderr, "[%s:%d] Pokedata: %p\n", __func__, __LINE__,
 				(void *)pokedata);
-		/* FIXME: fix the target address to handle more than 8 bytes */
-		if (ptrace(PTRACE_POKEDATA, pid, target, pokedata) < 0) {
+		if (ptrace(PTRACE_POKEDATA, pid, target + idx,
+					pokedata) < 0) {
 			int err = errno;
 			fprintf(stderr,
 				"[%s:%d] Ptrace PokeText for PID %d failed with error: %s\n",
 				__func__, __LINE__, pid, strerror(err));
 			return -1;
 		}
+		idx += sizeof(size_t);
 	}
 	return 0;
 }
 
-static int hp_peekdata(pid_t pid, uintptr_t target, uintptr_t *outpeek)
+static int hp_peekdata(pid_t pid, uintptr_t target, uintptr_t *outpeek,
+						int verbose)
 {
 	int err = 0;
 	long peekdata = ptrace(PTRACE_PEEKDATA, pid, target, NULL);
 	err = errno;
-	fprintf(stderr, "[%s:%d] Peekdata: %p\n", __func__, __LINE__,
+	if (verbose > 2)
+		fprintf(stderr, "[%s:%d] Peekdata: %p\n", __func__, __LINE__,
 			(void *)peekdata);
 	if (peekdata == -1 && err != 0) {
 		fprintf(stderr,
@@ -522,13 +527,17 @@ static int hp_peekdata(pid_t pid, uintptr_t target, uintptr_t *outpeek)
 	}
 	if (outpeek)
 		*outpeek = peekdata;
-	return 0;
+	else
+		fprintf(stderr, "[%s:%d] Invalid arguments.\n", __func__, __LINE__);
+	return outpeek ? 0 : -1;
 }
 
-static int hp_pokedata(pid_t pid, uintptr_t target, uintptr_t pokedata)
+static int hp_pokedata(pid_t pid, uintptr_t target, uintptr_t pokedata,
+						int verbose)
 {
 	int err = 0;
-	fprintf(stderr, "[%s:%d] Pokedata: %p\n", __func__, __LINE__,
+	if (verbose > 2)
+		fprintf(stderr, "[%s:%d] Pokedata: %p\n", __func__, __LINE__,
 			(void *)pokedata);
 	if (ptrace(PTRACE_POKEDATA, pid, target, (void *)pokedata) < 0) {
 		fprintf(stderr,
@@ -543,8 +552,6 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 {
 	size_t dllsz = 0;
 	size_t tgtsz = 0;
-	size_t codesz = 0;
-	const unsigned char *code = NULL;
 	int rc = 0;
 	if (!dll || !hp)
 		return -1;
@@ -558,8 +565,6 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 	if (hp->verbose > 0)
 		fprintf(stderr, "[%s:%d] Allocating %ld bytes in the target.\n",
 				__func__, __LINE__, tgtsz);
-	codesz = sizeof(hotpatch_call64) / sizeof(unsigned char);
-	code = hotpatch_call64;
 	do {
 		/* The stack is read-write and not executable */
 		struct user iregs; /* intermediate registers */
@@ -568,6 +573,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 		uintptr_t nullcode = 0;
 		uintptr_t result = 0;
 		uintptr_t stack = 0;
+		const unsigned char *udll = (const unsigned char *)dll;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Attaching to PID %d\n", __func__,
 					__LINE__, hp->pid);
@@ -585,13 +591,13 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 		memcpy(&iregs, &oregs, sizeof(oregs));
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying stack out.\n", __func__, __LINE__);
-		if ((rc = hp_peekdata(hp->pid, iregs.regs.rsp, &stack)) < 0)
+		if ((rc = hp_peekdata(hp->pid, iregs.regs.rsp, &stack, verbose)) < 0)
 			break;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying Null code to stack.\n",
 					__func__, __LINE__);
 		nullcode = 0;
-		if ((rc = hp_pokedata(hp->pid, iregs.regs.rsp, nullcode)) < 0)
+		if ((rc = hp_pokedata(hp->pid, iregs.regs.rsp, nullcode, verbose)) < 0)
 			break;
 		iregs.regs.rsi = 0;
 		iregs.regs.rdi = tgtsz; /* allocate the size here */
@@ -620,14 +626,13 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 					__LINE__, result);
 		if (!result)
 			break;
-		if ((rc = hp_remote_write(hp->pid, result,
-								(const unsigned char *)dll, dllsz, tgtsz)) < 0)
+		if ((rc = hp_copydata(hp->pid, result, udll, dllsz, verbose)) < 0)
 			break;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying Null code to stack.\n",
 					__func__, __LINE__);
 		nullcode = 0;
-		if ((rc = hp_pokedata(hp->pid, iregs.regs.rsp, nullcode)) < 0)
+		if ((rc = hp_pokedata(hp->pid, iregs.regs.rsp, nullcode, verbose)) < 0)
 			break;
 		iregs.regs.rsi = RTLD_LAZY | RTLD_GLOBAL;
 		iregs.regs.rdi = result;
@@ -664,7 +669,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying stack back.\n",
 					__func__, __LINE__);
-		if ((rc = hp_pokedata(hp->pid, oregs.regs.rsp, stack)) < 0)
+		if ((rc = hp_pokedata(hp->pid, oregs.regs.rsp, stack, verbose)) < 0)
 			break;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Executing...\n", __func__, __LINE__);

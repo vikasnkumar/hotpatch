@@ -47,3 +47,6 @@ add_test(cpptest ${CMAKE_CURRENT_BINARY_DIR}/cpptest)
 
 add_executable(asmtest asmtest.c)
 add_test(asmtest ${CMAKE_CURRENT_BINARY_DIR}/asmtest)
+
+add_library(dlltest SHARED dlltest.c)
+set_target_properties(dlltest PROPERTIES LINK_FLAGS "-fPIC -nostartfiles")

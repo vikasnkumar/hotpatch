@@ -493,15 +493,48 @@ static int hp_remote_write(pid_t pid, uintptr_t target,
 		memset(&pokedata, 0x90, sizeof(pokedata));
 		for (jdx = 0; jdx < sizeof(size_t) && pos < codesz; ++jdx)
 			((unsigned char *)&pokedata)[sizeof(size_t) - 1 - jdx] = code[pos++];
-		fprintf(stderr, "[%s:%d] Pokedata: %p\n", __func__, __LINE__, (void *)pokedata);
+		fprintf(stderr, "[%s:%d] Pokedata: %p\n", __func__, __LINE__,
+				(void *)pokedata);
 		/* FIXME: fix the target address to handle more than 8 bytes */
-		if (ptrace(PTRACE_POKETEXT, pid, target, pokedata) < 0) {
+		if (ptrace(PTRACE_POKEDATA, pid, target, pokedata) < 0) {
 			int err = errno;
 			fprintf(stderr,
 				"[%s:%d] Ptrace PokeText for PID %d failed with error: %s\n",
 				__func__, __LINE__, pid, strerror(err));
 			return -1;
 		}
+	}
+	return 0;
+}
+
+static int hp_peekdata(pid_t pid, uintptr_t target, uintptr_t *outpeek)
+{
+	int err = 0;
+	long peekdata = ptrace(PTRACE_PEEKDATA, pid, target, NULL);
+	err = errno;
+	fprintf(stderr, "[%s:%d] Peekdata: %p\n", __func__, __LINE__,
+			(void *)peekdata);
+	if (peekdata == -1 && err != 0) {
+		fprintf(stderr,
+				"[%s:%d] Ptrace PeekText for PID %d failed with error: %s\n",
+				__func__, __LINE__, pid, strerror(err));
+		return -1;
+	}
+	if (outpeek)
+		*outpeek = peekdata;
+	return 0;
+}
+
+static int hp_pokedata(pid_t pid, uintptr_t target, uintptr_t pokedata)
+{
+	int err = 0;
+	fprintf(stderr, "[%s:%d] Pokedata: %p\n", __func__, __LINE__,
+			(void *)pokedata);
+	if (ptrace(PTRACE_POKEDATA, pid, target, (void *)pokedata) < 0) {
+		fprintf(stderr,
+				"[%s:%d] Ptrace PokeText for PID %d failed with error: %s\n",
+				__func__, __LINE__, pid, strerror(err));
+		return -1;
 	}
 	return 0;
 }
@@ -513,7 +546,6 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 	size_t codesz = 0;
 	const unsigned char *code = NULL;
 	int rc = 0;
-	struct user oregs;
 	if (!dll || !hp)
 		return -1;
 	if (!hp->fn_malloc || !hp->fn_dlopen)
@@ -529,10 +561,13 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 	codesz = sizeof(hotpatch_call64) / sizeof(unsigned char);
 	code = hotpatch_call64;
 	do {
-		struct user iregs;
+		/* The stack is read-write and not executable */
+		struct user iregs; /* intermediate registers */
+		struct user oregs; /* original registers */
 		int verbose = hp->verbose;
-		uintptr_t caddr = hp->exe_entry_point + sizeof(void *);
-		uintptr_t daddr = 0;
+		uintptr_t nullcode = 0;
+		uintptr_t result = 0;
+		uintptr_t stack = 0;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Attaching to PID %d\n", __func__,
 					__LINE__, hp->pid);
@@ -543,22 +578,28 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 		if ((rc = hp_wait(hp->pid)) < 0)
 			break;
 		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Getting registers.\n", __func__, __LINE__);
+			fprintf(stderr, "[%s:%d] Getting original registers.\n",
+					__func__, __LINE__);
 		if ((rc = hp_get_regs(hp->pid, &oregs)) < 0)
 			break;
 		memcpy(&iregs, &oregs, sizeof(oregs));
 		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Copying code.\n", __func__, __LINE__);
-		if ((rc = hp_remote_write(hp->pid, caddr, code, codesz, codesz)) < 0)
+			fprintf(stderr, "[%s:%d] Copying stack out.\n", __func__, __LINE__);
+		if ((rc = hp_peekdata(hp->pid, iregs.regs.rsp, &stack)) < 0)
 			break;
-		/* FIXME: this doesn't work here */
-		iregs.regs.rip = caddr;
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Copying Null code to stack.\n",
+					__func__, __LINE__);
+		nullcode = 0;
+		if ((rc = hp_pokedata(hp->pid, iregs.regs.rsp, nullcode)) < 0)
+			break;
 		iregs.regs.rsi = 0;
 		iregs.regs.rdi = tgtsz; /* allocate the size here */
-		iregs.regs.rbx = hp->fn_malloc;
+		iregs.regs.rip = hp->fn_malloc;
 		iregs.regs.rax = 0;
 		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Setting registers.\n", __func__, __LINE__);
+			fprintf(stderr, "[%s:%d] Setting registers and invoking malloc.\n",
+					__func__, __LINE__);
 		if ((rc = hp_set_regs(hp->pid, &iregs)) < 0)
 			break;
 		if (verbose > 1)
@@ -573,22 +614,28 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 			fprintf(stderr, "[%s:%d] Getting registers.\n", __func__, __LINE__);
 		if ((rc = hp_get_regs(hp->pid, &iregs)) < 0)
 			break;
-		daddr = iregs.regs.rax;
+		result = iregs.regs.rax;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying data to 0x%lx.\n", __func__,
-					__LINE__, daddr);
-		if (!daddr)
+					__LINE__, result);
+		if (!result)
 			break;
-		if ((rc = hp_remote_write(hp->pid, daddr,
+		if ((rc = hp_remote_write(hp->pid, result,
 								(const unsigned char *)dll, dllsz, tgtsz)) < 0)
 			break;
-		iregs.regs.rip = caddr + sizeof(void *);
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Copying Null code to stack.\n",
+					__func__, __LINE__);
+		nullcode = 0;
+		if ((rc = hp_pokedata(hp->pid, iregs.regs.rsp, nullcode)) < 0)
+			break;
 		iregs.regs.rsi = RTLD_LAZY | RTLD_GLOBAL;
-		iregs.regs.rdi = daddr;
-		iregs.regs.rbx = hp->fn_dlopen;
+		iregs.regs.rdi = result;
+		iregs.regs.rip = hp->fn_dlopen;
 		iregs.regs.rax = 0;
 		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Setting registers.\n", __func__, __LINE__);
+			fprintf(stderr, "[%s:%d] Setting registers and invoking dlopen.\n",
+					__func__, __LINE__);
 		if ((rc = hp_set_regs(hp->pid, &iregs)) < 0)
 			break;
 		if (verbose > 1)
@@ -603,35 +650,38 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 			fprintf(stderr, "[%s:%d] Getting registers.\n", __func__, __LINE__);
 		if ((rc = hp_get_regs(hp->pid, &iregs)) < 0)
 			break;
-		daddr = iregs.regs.rax;
-		fprintf(stderr, "[%s:%d] Dll opened 0x%lx\n", __func__, __LINE__,
-				daddr);
-	} while (0);
-	if (hp->verbose > 1)
-		fprintf(stderr, "[%s:%d] Detaching from PID %d\n", __func__,
-				__LINE__, hp->pid);
-	if ((rc = hp_set_regs(hp->pid, &oregs)) < 0) {
-		fprintf(stderr, "[%s:%d] PID %d will be unstable.\n", __func__,
-				__LINE__, hp->pid);
-	}
-	if (hp_detach(hp->pid) < 0) {
-		if (hp->verbose > 0)
-			fprintf(stderr, "[%s:%d] Error detaching from PID %d\n", __func__,
+		result = iregs.regs.rax;
+		fprintf(stderr, "[%s:%d] Dll opened at 0x%lx\n", __func__, __LINE__,
+				result);
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Setting original registers.\n",
+					__func__, __LINE__);
+		if ((rc = hp_set_regs(hp->pid, &oregs)) < 0) {
+			fprintf(stderr, "[%s:%d] PID %d will be unstable.\n", __func__,
 					__LINE__, hp->pid);
-		rc = -1;
+			break;
+		}
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Copying stack back.\n",
+					__func__, __LINE__);
+		if ((rc = hp_pokedata(hp->pid, oregs.regs.rsp, stack)) < 0)
+			break;
+		if (verbose > 1)
+			fprintf(stderr, "[%s:%d] Executing...\n", __func__, __LINE__);
+		if ((rc = hp_exec(hp->pid)) < 0)
+			break;
+	} while (0);
+	if (rc < 0) {
+		if (hp->verbose > 1)
+			fprintf(stderr, "[%s:%d] Detaching from PID %d\n", __func__,
+					__LINE__, hp->pid);
+		if (hp_detach(hp->pid) < 0) {
+			if (hp->verbose > 0)
+				fprintf(stderr, "[%s:%d] Error detaching from PID %d\n", __func__,
+						__LINE__, hp->pid);
+			rc = -1;
+		}
 	}
-	/* copy code for allocation */
-	/* get return address of allocation */
-	/* copy data to the address */
-	/* copy code for dlopen */
-	/* call dlopen with allocated address */
-	/* get return address of dll */
-	/* copy code for allocation */
-	/* get return address of allocation */
-	/* copy data to address */
-	/* copy code for dlsym */
-	/* call dlsym */
-	/* call symbol */
 	return rc;
 }
 

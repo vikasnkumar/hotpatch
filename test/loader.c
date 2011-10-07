@@ -41,6 +41,10 @@ int main(int argc, char **argv)
     struct ld_procmaps *maps = NULL;
 	size_t mapnum = 0;
 	int ret;
+	unsigned char codedata[] = { 0xCD, 0x03 };
+	void (*func)();
+	uintptr_t pokedata = 0;
+	unsigned char *code = &codedata[0];
 	pid_t pid = argc > 1 ? (pid_t)strtol(argv[1], NULL, 10) : getpid();
 	assert(pid != 0);
 	maps = ld_load_maps(pid, 6 /* largest verbose */, &mapnum);
@@ -62,6 +66,12 @@ int main(int argc, char **argv)
 						  false, NULL, 6);
 	assert(ret < 0);
 	ld_free_maps(maps, mapnum);
+	*((void **)&func) = code;
+	printf("Code: %p = %p\n", code, *(void **)code);
+	func();
+	memcpy(&pokedata, code, sizeof(codedata));
+	printf("Poke: %p = %p\n", (void *)&pokedata, *(void **)&pokedata);
+	*((void **)&func) = &pokedata;
     return 0;
 }
 

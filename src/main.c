@@ -46,9 +46,11 @@ void print_usage(const char *app)
 	printf("\nOptions:\n");
 	printf("-h           This help message.\n");
 	printf("-v[vvvv]     Enable verbose logging. Add more 'v's for more\n");
-	printf("-s <name>    Specify symbol name. Default is _start\n");
 	printf("-N           Dry run. Do not modify anything in process\n");
-	printf("-l <.so>     Path or name of the .so file to load\n");
+	printf("-s <name>    Specify symbol name. Default is _start. Set "
+			"execution pointer here\n");
+	printf("-l <.so>     Path or name of the .so file to load. Switches off "
+			"execution pointer reset.\n");
 }
 
 void print_options(const struct hp_options *opts)
@@ -154,35 +156,36 @@ int main(int argc, char **argv)
 			rc = -1;
 			break;
 		}
-		/* handles the stripped apps as well */
-		if (opts.is__start) {
-			ptr = hotpatch_get_entry_point(hp);
-		} else {
-			ptr = hotpatch_read_symbol(hp, opts.symbol, NULL, NULL);
-		}
-		if (!ptr) {
-			printf("Symbol %s not found. Cannot proceed\n", opts.symbol);
-			break;
-		}
-		printf("Symbol %s found at 0x%lx\n", opts.symbol, ptr);
 		if (opts.dryrun)
 			break;
-		if (opts.dll)
+		if (opts.dll) {
 			rc = hotpatch_inject_library(hp, opts.dll, NULL);
-		/*
-		rc = hotpatch_attach(hp);
-		if (rc < 0) {
-			printf("Failed to attach to process. Cannot proceed\n");
-			break;
+		} else {
+			/* handles the stripped apps as well */
+			if (opts.is__start) {
+				ptr = hotpatch_get_entry_point(hp);
+			} else {
+				ptr = hotpatch_read_symbol(hp, opts.symbol, NULL, NULL);
+			}
+			if (!ptr) {
+				printf("Symbol %s not found. Cannot proceed\n", opts.symbol);
+				break;
+			}
+			printf("Setting execution pointer to %s at 0x%lx\n", opts.symbol, ptr);
+			rc = hotpatch_attach(hp);
+			if (rc < 0) {
+				printf("Failed to attach to process. Cannot proceed\n");
+				break;
+			}
+			rc = hotpatch_set_execution_pointer(hp, ptr);
+			if (rc < 0) {
+				printf("Failed to set execution pointer to 0x%lx\n", ptr);
+				rc = hotpatch_detach(hp);
+				break;
+			}
+			rc = hotpatch_detach(hp);
 		}
-		rc = hotpatch_set_execution_pointer(hp, ptr);
-		if (rc < 0) {
-			printf("Failed to set execution pointer to 0x%lx\n", ptr);
-			break;
-		}
-		*/
 	} while (0);
-/*	rc = hotpatch_detach(hp);*/
 	hotpatch_destroy(hp);
 	hp = NULL;
 	if (opts.symbol)

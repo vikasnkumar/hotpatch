@@ -95,8 +95,11 @@ int hotpatch_set_execution_pointer(hotpatch_t *, uintptr_t location);
  * Inject a shared object into the process and invoke the given symbol without
  * arguments. No thread will be created by hotpatch.
  * If the symbol is NULL, then _init() is expected to be in the library.
+ * The return address of the dlopen() call can be optionally returned in
+ * the outaddr variable.
  */
-int hotpatch_inject_library(hotpatch_t *, const char *dll, const char *symbol);
+int hotpatch_inject_library(hotpatch_t *, const char *dll, const char *symbol,
+							uintptr_t *outaddr);
 /*
  * If the target process has linked with pthread, then create a thread using
  * that. Load the dll using dlopen and get the symbol accordingly.

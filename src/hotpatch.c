@@ -548,7 +548,8 @@ static int hp_pokedata(pid_t pid, uintptr_t target, uintptr_t pokedata,
 	return 0;
 }
 
-int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
+int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
+							uintptr_t *outaddr)
 {
 	size_t dllsz = 0;
 	size_t tgtsz = 0;
@@ -656,8 +657,11 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol)
 		if ((rc = hp_get_regs(hp->pid, &iregs)) < 0)
 			break;
 		result = iregs.regs.rax;
-		fprintf(stderr, "[%s:%d] Dll opened at 0x%lx\n", __func__, __LINE__,
+		if (verbose > 0)
+			fprintf(stderr, "[%s:%d] Dll opened at 0x%lx\n", __func__, __LINE__,
 				result);
+		if (outaddr)
+			*outaddr = result;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Setting original registers.\n",
 					__func__, __LINE__);

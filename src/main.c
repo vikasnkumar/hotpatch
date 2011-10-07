@@ -44,13 +44,14 @@ void print_usage(const char *app)
 {
     printf("\nUsage: %s [options] <PID of process to patch>\n", app);
 	printf("\nOptions:\n");
-	printf("-h           This help message.\n");
+	printf("-h           This help message\n");
 	printf("-v[vvvv]     Enable verbose logging. Add more 'v's for more\n");
 	printf("-N           Dry run. Do not modify anything in process\n");
-	printf("-s <name>    Specify symbol name. Default is _start. Set "
-			"execution pointer here\n");
 	printf("-l <.so>     Path or name of the .so file to load. Switches off "
-			"execution pointer reset.\n");
+			"execution pointer reset\n");
+	printf("-s <name>    Symbol to invoke during the dll inject. Optional.\n");
+	printf("-x <name>    Set execution pointer to symbol. Cannot be set with "
+			"-s option\n");
 }
 
 void print_options(const struct hp_options *opts)
@@ -65,8 +66,9 @@ void print_options(const struct hp_options *opts)
 				"Dry run: %s\n",
 				opts->verbose,
 				opts->pid,
-				opts->symbol,
-				opts->dll,
+				(opts->symbol ? opts->symbol :
+					(opts->dll ? "_init" : "_start")),
+				(opts->dll ? opts->dll : "N/A"),
 				(opts->dryrun ? "true" : "false")
 			  );
 	}
@@ -81,21 +83,37 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
         optind = 1;
 		opts->is__start = false;
 		opts->dryrun = false;
-        while ((opt = getopt(argc, argv, "hNs:l:v::")) != -1) {
+        while ((opt = getopt(argc, argv, "hNs:x::l:v::")) != -1) {
             switch (opt) {
             case 'v':
                 opts->verbose += optarg ? (int)strnlen(optarg, 5) : 1;
                 break;
 			case 's':
+				if (opts->symbol) {
+					free(opts->symbol);
+					opts->symbol = NULL;
+				}
 				opts->symbol = strdup(optarg);
 				if (!opts->symbol) {
 					printf("[%s:%d] Out of memory\n", __func__, __LINE__);
 					return -1;
 				}
-				if (strcmp(optarg, HOTPATCH_LINUX_START) == 0)
+				break;
+			case 'x':
+				if (optarg) {
+					opts->symbol = strdup(optarg);
+					if (strcmp(optarg, HOTPATCH_LINUX_START) == 0)
+						opts->is__start = true;
+					else
+						opts->is__start = false;
+				} else {
+					opts->symbol = strdup(HOTPATCH_LINUX_START);
 					opts->is__start = true;
-				else
-					opts->is__start = false;
+				}
+				if (!opts->symbol) {
+					printf("[%s:%d] Out of memory\n", __func__, __LINE__);
+					return -1;
+				}
 				break;
 			case 'N':
 				opts->dryrun = true;
@@ -123,14 +141,6 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
             printf("Process PID can't be 0. Tried parsing: %s\n", argv[optind]);
 			return -1;
         }
-		if (!opts->symbol) {
-			opts->symbol = strdup(HOTPATCH_LINUX_START);
-			opts->is__start = true;
-		}
-		if (!opts->symbol) {
-			printf("[%s:%d] Out of memory\n", __func__, __LINE__);
-			return -1;
-		}
         return 0;
     }
     return -1;
@@ -159,7 +169,11 @@ int main(int argc, char **argv)
 		if (opts.dryrun)
 			break;
 		if (opts.dll) {
-			rc = hotpatch_inject_library(hp, opts.dll, NULL);
+			uintptr_t res = 0;
+			rc = hotpatch_inject_library(hp, opts.dll, opts.symbol, &res);
+			if (rc >=0) {
+				printf("Dll was injected at %p\n", (void *)res);
+			}
 		} else {
 			/* handles the stripped apps as well */
 			if (opts.is__start) {

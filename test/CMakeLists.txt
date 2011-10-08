@@ -34,7 +34,6 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(ptracetest ptrace.c)
 target_link_libraries(ptracetest ${HOTPATCH_DEP_LIBS})
-#add_test(ptracetest ${CMAKE_CURRENT_BINARY_DIR}/ptracetest)
 
 add_executable(dummy dummy.c)
 add_executable(loadertest loader.c)
@@ -48,5 +47,6 @@ add_test(cpptest ${CMAKE_CURRENT_BINARY_DIR}/cpptest)
 add_executable(asmtest asmtest.c)
 add_test(asmtest ${CMAKE_CURRENT_BINARY_DIR}/asmtest)
 
-add_library(dlltest SHARED dlltest.c)
-set_target_properties(dlltest PROPERTIES LINK_FLAGS "-fPIC -nostartfiles")
+add_library(hotpatchdlltest SHARED dlltest.c)
+set_target_properties(hotpatchdlltest PROPERTIES LINK_FLAGS "-fPIC -nostartfiles")
+install(TARGETS hotpatchdlltest LIBRARY DESTINATION lib)

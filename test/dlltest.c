@@ -29,11 +29,15 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <hotpatch_config.h>
+#ifdef HOTPATCH_HAS_ASSERT_H
+	#undef NDEBUG
+	#include <assert.h>
+#endif
 
 void _init()
 {
 	time_t tt = time(NULL);
-	FILE *ff = fopen("/tmp/test.tmp", "a");
+	FILE *ff = fopen("/tmp/hotpatch.tmp", "a");
 	if (ff) {
 		fprintf(ff, "Dll opened. %s\n", ctime(&tt));
 		fclose(ff);

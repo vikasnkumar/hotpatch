@@ -1,0 +1,34 @@
+HOTPATCH INSTALLATION
+======================
+
+Pre-requisites:
+
+1. CMake: You need to have cmake 2.6 or above installed.
+2. Compilers: gcc is needed along with standard headers.
+3. GNU Make: make is needed to build the code.
+
+
+How to install:
+
+Release build:
+
+$ make
+$ make test
+$ make install
+
+By default make will try to install in /usr/local. If you want your custom
+directory then you can do the following:
+
+$ make install PREFIX=/path/to/install
+
+Debug build:
+
+$ make debug
+$ make testdebug
+$ make installdebug
+
+By default make will try to install in /usr/local. If you want your custom
+directory then you can do the following:
+
+$ make installdebug PREFIX=/path/to/install
+

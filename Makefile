@@ -26,44 +26,68 @@
 ### ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 ### (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ### SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-### 
-project(hotpatch)
+###
+CMAKE=/usr/bin/cmake
+PREFIX=/usr/local
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
+default: release
+.PHONY: default
 
-foreach (ASM_VAR call32 call64)
-	set(ASM_F ${CMAKE_CURRENT_SOURCE_DIR}/${ASM_VAR}.s)
-	set(ASM_F_OBJ ${CMAKE_CURRENT_BINARY_DIR}/${ASM_VAR}.o)
-	set(ASM_F_HDR ${CMAKE_CURRENT_BINARY_DIR}/${ASM_VAR}.h)
-	set(ASM_F_VAR hotpatch_${ASM_VAR})
-	set(ASM2HDR ${CMAKE_CURRENT_SOURCE_DIR}/asm2hdr.pl)
-	if (HOTPATCH_ASM AND PERL_FOUND)
-		add_custom_command(OUTPUT ${ASM_F_HDR}
-			COMMAND ${HOTPATCH_ASM} ARGS ${ASM_F} -o ${ASM_F_OBJ}
-			COMMAND ${PERL_EXECUTABLE} ARGS ${ASM2HDR} ${ASM_F_OBJ}
-			${ASM_F_HDR} ${ASM_F_VAR}
-			DEPENDS ${ASM_F} ${ASM2HDR}
-			WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-		set(ASM_HEADERS ${ASM_HEADERS} ${ASM_F_HDR})
-	else (HOTPATCH_ASM AND PERL_FOUND)
-		message(FATAL_ERROR "You need Perl for this")
-	endif (HOTPATCH_ASM AND PERL_FOUND)
-endforeach (ASM_VAR call32 call64)
-add_custom_target(asm_header DEPENDS ${ASM_HEADERS})
+all: release debug
+.PHONY: all
 
-add_library(hotpatch SHARED hotpatch.c exedetails.c loader.c)
-add_library(hotpatch_s STATIC hotpatch.c exedetails.c loader.c)
-add_dependencies(hotpatch asm_header)
-add_dependencies(hotpatch_s asm_header)
-target_link_libraries(hotpatch ${HOTPATCH_DEP_LIBS})
-target_link_libraries(hotpatch_s ${HOTPATCH_DEP_LIBS})
-set_target_properties(hotpatch_s PROPERTIES OUTPUT_NAME "hotpatch"
-	CLEAN_DIRECT_OUTPUT 1)
-set_target_properties(hotpatch PROPERTIES CLEAN_DIRECT_OUTPUT 1)
-install(TARGETS hotpatch LIBRARY DESTINATION lib)
-install(TARGETS hotpatch_s ARCHIVE DESTINATION lib)
+clean: cleanrelease
+.PHONY: clean
 
-add_executable(hotpatcher main.c)
-target_link_libraries(hotpatcher hotpatch_s)
-install(TARGETS hotpatcher RUNTIME DESTINATION bin)
+test: testrelease
+.PHONY: test
+
+install: installrelease
+.PHONY: install
+
+release:
+	@mkdir -p Release
+	@cd Release && $(CMAKE) -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(PREFIX) ..
+	@cd Release && $(MAKE)
+	@echo "Release Build complete"
+.PHONY: release
+
+debug:
+	@mkdir -p Debug
+	@cd Debug && $(CMAKE) -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=$(PREFIX) ..
+	@cd Debug && $(MAKE)
+	@echo "Debug Build complete"
+.PHONY: debug
+
+cleanrelease:
+	@if test -d Release; then cd Release && $(MAKE) clean; fi
+	@if test -d Release; then cd Release && rm -f CMakeCache.txt; fi
+	@if test -d Release; then echo "Release Cleaning complete"; else echo "Nothing to clean"; fi
+.PHONY: cleanrelease
+
+cleandebug:
+	@if test -d Debug; then cd Debug && $(MAKE) clean; fi
+	@if test -d Debug; then cd Debug && rm -f CMakeCache.txt; fi
+	@if test -d Debug; then echo "Debug Cleaning complete"; else echo "Nothing to clean"; fi
+.PHONY: cleandebug
+
+testrelease: release
+	cd Release && $(MAKE) test
+.PHONY: testrelease
+
+testdebug: debug
+	cd Debug && $(MAKE) test
+.PHONY: testdebug
+
+installrelease: release
+	@cd Release && $(CMAKE) -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(PREFIX) ..
+	@cd Release && $(MAKE) install
+	@echo "Release installation complete"
+.PHONY: installrelease
+
+installdebug: debug
+	@cd Debug && $(CMAKE) -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=$(PREFIX) ..
+	@cd Debug && $(MAKE) install
+	@echo "Debug installation complete"
+.PHONY: installdebug
+

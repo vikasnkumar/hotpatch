@@ -35,6 +35,7 @@
 extern "C" {
 #endif /* __cplusplus */
 
+#include <sys/types.h>
 #include <stdint.h>
 
 #define HOTPATCH_MAJOR_VERSION 0

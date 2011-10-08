@@ -40,9 +40,13 @@ add_executable(loadertest loader.c)
 target_link_libraries(loadertest hotpatch)
 add_test(loadertest ${CMAKE_CURRENT_BINARY_DIR}/loadertest)
 
-add_executable(cpptest cpptest.cpp)
-target_link_libraries(cpptest hotpatch)
-add_test(cpptest ${CMAKE_CURRENT_BINARY_DIR}/cpptest)
+add_executable(compiletestcpp cpptest.cpp)
+target_link_libraries(compiletestcpp hotpatch)
+add_test(compiletestcpp ${CMAKE_CURRENT_BINARY_DIR}/compiletestcpp)
+
+add_executable(compiletestc ctest.c)
+target_link_libraries(compiletestc hotpatch)
+add_test(compiletestc ${CMAKE_CURRENT_BINARY_DIR}/compiletestc)
 
 add_executable(asmtest asmtest.c)
 add_test(asmtest ${CMAKE_CURRENT_BINARY_DIR}/asmtest)

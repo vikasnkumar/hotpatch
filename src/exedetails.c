@@ -567,6 +567,10 @@ struct elf_symbol *exe_load_symbols(const char *filename, int verbose,
 			interp->name = ei.interp.name;
 			interp->length = ei.interp.length;
 			interp->ph_addr = ei.interp.ph_addr;
+		} else {
+			if (ei.interp.name)
+				free(ei.interp.name);
+			ei.interp.name = NULL;
 		}
 		if (is64)
 			*is64 = ei.is64;

@@ -767,3 +767,11 @@ do { \
 #undef HP_NULLIFYSTACK
 	return rc;
 }
+
+void hotpatch_version(int *major, int *minor)
+{
+	if (major)
+		*major = HOTPATCH_MAJOR_VERSION;
+	if (minor)
+		*minor = HOTPATCH_MINOR_VERSION;
+}

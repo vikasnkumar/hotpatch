@@ -45,6 +45,7 @@ void print_usage(const char *app)
     printf("\nUsage: %s [options] <PID of process to patch>\n", app);
 	printf("\nOptions:\n");
 	printf("-h           This help message\n");
+	printf("-V           Version number.\n");
 	printf("-v[vvvv]     Enable verbose logging. Add more 'v's for more\n");
 	printf("-N           Dry run. Do not modify anything in process\n");
 	printf("-l <.so>     Path or name of the .so file to load. Switches off "
@@ -83,7 +84,7 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
         optind = 1;
 		opts->is__start = false;
 		opts->dryrun = false;
-        while ((opt = getopt(argc, argv, "hNs:x::l:v::")) != -1) {
+        while ((opt = getopt(argc, argv, "hNVs:x::l:v::")) != -1) {
             switch (opt) {
             case 'v':
                 opts->verbose += optarg ? (int)strnlen(optarg, 5) : 1;
@@ -125,6 +126,14 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
 					return -1;
 				}
 				break;
+			case 'V':
+				{
+					int major = 0, minor = 0;
+					hotpatch_version(&major, &minor);
+					printf("Hotpatch version: %d.%d\n", major, minor);
+					return 1;
+				}
+				break;
 			case 'h':
             default:
                 print_usage(argv[0]);
@@ -152,8 +161,8 @@ int main(int argc, char **argv)
     hotpatch_t *hp = NULL;
 	int rc = 0;
 	/* parse all arguments first */
-    if (parse_arguments(argc, argv, &opts) < 0) {
-        return -1;
+    if ((rc = parse_arguments(argc, argv, &opts)) != 0) {
+        return rc;
     }
     print_options(&opts);
 	/* break from execution whenever a step fails */

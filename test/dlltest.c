@@ -37,7 +37,7 @@
 #define HP_DLLTEST(D,L) \
 do { \
 	time_t tt = time(NULL); \
-	FILE *ff = fopen("/tmp/hotpatch.tmp", "a"); \
+	FILE *ff = fopen("/tmp/hotpatchtest.log", "a"); \
 	if (ff) { \
 		fprintf(ff, "Dll opened. %s\n", ctime(&tt)); \
 		if (L > 0) \

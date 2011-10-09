@@ -550,7 +550,7 @@ static int hp_pokedata(pid_t pid, uintptr_t target, uintptr_t pokedata,
 
 int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 							const unsigned char *data, size_t datalen,
-							uintptr_t *outaddr)
+							uintptr_t *outaddr, uintptr_t *outres)
 {
 	size_t dllsz = 0;
 	size_t symsz = 0;
@@ -599,6 +599,40 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 		uintptr_t nullcode = 0;
 		uintptr_t result = 0;
 		uintptr_t stack = 0;
+		uintptr_t heapptr = 0;
+#undef HP_SETEXECWAITGET
+#undef HP_NULLIFYSTACK
+#define HP_NULLIFYSTACK() \
+do { \
+	if (verbose > 1) \
+		fprintf(stderr, "[%s:%d] Copying Null code to stack.\n", \
+			__func__, __LINE__); \
+	nullcode = 0; \
+	if ((rc = hp_pokedata(hp->pid, iregs.regs.rsp, nullcode, verbose)) < 0) \
+		break; \
+} while (0)
+
+#define HP_SETEXECWAITGET(fn) \
+do { \
+	if (verbose > 1) \
+		fprintf(stderr, "[%s:%d] Setting registers and invoking %s.\n", \
+			__func__, __LINE__, fn); \
+	if ((rc = hp_set_regs(hp->pid, &iregs)) < 0) \
+		break; \
+	if (verbose > 1) \
+		fprintf(stderr, "[%s:%d] Executing...\n", __func__, __LINE__); \
+	if ((rc = hp_exec(hp->pid)) < 0) \
+		break; \
+	if (verbose > 1) \
+		fprintf(stderr, "[%s:%d] Waiting...\n", __func__, __LINE__); \
+	if ((rc = hp_wait(hp->pid)) < 0) \
+		break; \
+	if (verbose > 1) \
+		fprintf(stderr, "[%s:%d] Getting registers.\n", __func__, __LINE__); \
+	if ((rc = hp_get_regs(hp->pid, &iregs)) < 0) \
+		break; \
+} while (0)
+		/* Prepare the child for injection */
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Attaching to PID %d\n", __func__,
 					__LINE__, hp->pid);
@@ -618,34 +652,16 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 			fprintf(stderr, "[%s:%d] Copying stack out.\n", __func__, __LINE__);
 		if ((rc = hp_peekdata(hp->pid, iregs.regs.rsp, &stack, verbose)) < 0)
 			break;
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Copying Null code to stack.\n",
-					__func__, __LINE__);
-		nullcode = 0;
-		if ((rc = hp_pokedata(hp->pid, iregs.regs.rsp, nullcode, verbose)) < 0)
-			break;
+		/* Call malloc */
+		HP_NULLIFYSTACK();
 		iregs.regs.rsi = 0;
-		iregs.regs.rdi = tgtsz; /* allocate the size here */
+		iregs.regs.rdi = tgtsz;
 		iregs.regs.rip = hp->fn_malloc;
 		iregs.regs.rax = 0;
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Setting registers and invoking malloc.\n",
-					__func__, __LINE__);
-		if ((rc = hp_set_regs(hp->pid, &iregs)) < 0)
-			break;
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Executing...\n", __func__, __LINE__);
-		if ((rc = hp_exec(hp->pid)) < 0)
-			break;
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Waiting...\n", __func__, __LINE__);
-		if ((rc = hp_wait(hp->pid)) < 0)
-			break;
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Getting registers.\n", __func__, __LINE__);
-		if ((rc = hp_get_regs(hp->pid, &iregs)) < 0)
-			break;
+		HP_SETEXECWAITGET("malloc");
 		result = iregs.regs.rax;
+		heapptr = iregs.regs.rax; /* keep a copy of this pointer */
+		/* Copy data to the malloced area */
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying %ld bytes to 0x%lx.\n", __func__,
 					__LINE__, tgtsz, result);
@@ -653,39 +669,67 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 			break;
 		if ((rc = hp_copydata(hp->pid, result, mdata, tgtsz, verbose)) < 0)
 			break;
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Copying Null code to stack.\n",
-					__func__, __LINE__);
-		nullcode = 0;
-		if ((rc = hp_pokedata(hp->pid, iregs.regs.rsp, nullcode, verbose)) < 0)
-			break;
+		/* Call dlopen */
+		HP_NULLIFYSTACK();
 		iregs.regs.rsi = RTLD_LAZY | RTLD_GLOBAL;
-		iregs.regs.rdi = result;
+		iregs.regs.rdi = result; /* the value from malloc() */
 		iregs.regs.rip = hp->fn_dlopen;
 		iregs.regs.rax = 0;
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Setting registers and invoking dlopen.\n",
-					__func__, __LINE__);
-		if ((rc = hp_set_regs(hp->pid, &iregs)) < 0)
-			break;
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Executing...\n", __func__, __LINE__);
-		if ((rc = hp_exec(hp->pid)) < 0)
-			break;
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Waiting...\n", __func__, __LINE__);
-		if ((rc = hp_wait(hp->pid)) < 0)
-			break;
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Getting registers.\n", __func__, __LINE__);
-		if ((rc = hp_get_regs(hp->pid, &iregs)) < 0)
-			break;
+		HP_SETEXECWAITGET("dlopen");
 		result = iregs.regs.rax;
 		if (verbose > 0)
 			fprintf(stderr, "[%s:%d] Dll opened at 0x%lx\n", __func__, __LINE__,
 				result);
 		if (outaddr)
 			*outaddr = result;
+		/* Call dlsym */
+		if (symbol && hp->fn_dlsym && result != 0) {
+			HP_NULLIFYSTACK();
+			iregs.regs.rsi = heapptr + dllsz;
+			iregs.regs.rdi = result; /* the value from dlopen() */
+			iregs.regs.rip = hp->fn_dlsym;
+			iregs.regs.rax = 0;
+			HP_SETEXECWAITGET("dlsym");
+			result = iregs.regs.rax;
+			if (verbose > 0)
+				fprintf(stderr, "[%s:%d] Symbol %s found at 0x%lx\n",
+						__func__, __LINE__, symbol, result);
+			if (result != 0) {
+				HP_NULLIFYSTACK();
+				if (datasz > 0) {
+					iregs.regs.rsi = datasz;
+					iregs.regs.rdi = heapptr + dllsz + symsz;
+				} else {
+					iregs.regs.rsi = 0;
+					iregs.regs.rdi = 0;
+				}
+				iregs.regs.rip = result; /* the value from dlsym() */
+				iregs.regs.rax = 0;
+				HP_SETEXECWAITGET(symbol);
+				result = iregs.regs.rax;
+				if (verbose > 0)
+					fprintf(stderr, "[%s:%d] Return value from invoking %s(): %p\n",
+							__func__, __LINE__, symbol, (void *)result);
+				if (outres)
+					*outres = result;
+			} else {
+				if (verbose > 0)
+					fprintf(stderr, "[%s:%d] Unable to find %s(). Dll might "
+							"already have been injected earlier.\n",
+							__func__, __LINE__, symbol);
+				if (outres)
+					*outres = 0;
+			}
+		} else {
+			if (verbose > 1 && symbol)
+				fprintf(stderr, "[%s:%d] %s not invoked as dlsym() wasn't "
+						"found.\n", __func__, __LINE__, symbol);
+			else if (verbose > 1)
+				fprintf(stderr, "[%s:%d] No symbol was specified. _init() might"
+						" have been invoked.\n", __func__, __LINE__);
+			if (outres)
+				*outres = 0;
+		}
 		/* Original reset */
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Setting original registers.\n",
@@ -719,5 +763,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 	if (mdata)
 		free(mdata);
 	mdata = NULL;
+#undef HP_SETEXECWAITGET
+#undef HP_NULLIFYSTACK
 	return rc;
 }

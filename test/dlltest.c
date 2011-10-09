@@ -34,12 +34,25 @@
 	#include <assert.h>
 #endif
 
+#define HP_DLLTEST(D,L) \
+do { \
+	time_t tt = time(NULL); \
+	FILE *ff = fopen("/tmp/hotpatch.tmp", "a"); \
+	if (ff) { \
+		fprintf(ff, "Dll opened. %s\n", ctime(&tt)); \
+		if (L > 0) \
+			fprintf(ff, "Data: %s Len: %ld\n", (char *)D, (size_t)L); \
+		fclose(ff); \
+	} \
+} while (0)
+
 void _init()
 {
-	time_t tt = time(NULL);
-	FILE *ff = fopen("/tmp/hotpatch.tmp", "a");
-	if (ff) {
-		fprintf(ff, "Dll opened. %s\n", ctime(&tt));
-		fclose(ff);
-	}
+	HP_DLLTEST(__func__, 0);
+}
+
+int mysym(char *data, size_t len)
+{
+	HP_DLLTEST(data, len);
+	return 0xDEADBEEF;
 }

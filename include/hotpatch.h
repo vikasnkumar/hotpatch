@@ -102,10 +102,13 @@ int hotpatch_set_execution_pointer(hotpatch_t *, uintptr_t location);
  * the symbol when invoked.
  * The return address of the dlopen() call can be optionally returned in
  * the outaddr variable.
+ * The return value from the invocation of the symbol in the process can be
+ * optionally returned in the outres variable. If the symbol is NULL, or if the
+ * symbol returns void, then the return value will be undefined.
  */
 int hotpatch_inject_library(hotpatch_t *, const char *dll, const char *symbol,
 							const unsigned char *data, size_t datalen,
-							uintptr_t *outaddr);
+							uintptr_t *outaddr, uintptr_t *outres);
 #ifdef __cplusplus
 } /* end of extern C */
 #endif /* __cplusplus */

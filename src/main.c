@@ -169,11 +169,15 @@ int main(int argc, char **argv)
 		if (opts.dryrun)
 			break;
 		if (opts.dll) {
-			uintptr_t res = 0;
+			uintptr_t dlres = 0;
+			uintptr_t symres = 0;
 			rc = hotpatch_inject_library(hp, opts.dll, opts.symbol, NULL, 0,
-										 &res);
+										 &dlres, &symres);
 			if (rc >=0) {
-				printf("Dll was injected at %p\n", (void *)res);
+				printf("Dll was injected at %p\n", (void *)dlres);
+				printf("Invocation of %s() returned %p\n",
+						(opts.symbol ? opts.symbol : "_init"),
+						(void *)symres);
 			}
 		} else {
 			/* handles the stripped apps as well */

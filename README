@@ -1,3 +1,133 @@
+Introduction to Hotpatch
+=========================
+Hotpatch is a library that can be used to dynamically load a shared library
+(.so) file on Linux from one process into another already running process,
+without affecting the execution of the target process.
+
+The current version is 0.1.
+
+The limitations, directions on how to use, and possible uses of hotpatch will be
+explained in this document.
+
+The main idea of hotpatch stems from the fact that in Linux, it is not easy to
+load a library into another already running process. In Windows, there is an API
+called CreateRemoteThread() that can load a library into another process very
+easily with a couple of API calls. Hotpatch makes this functionality available
+to Linux users and developers, with a single API call. Unlike other available
+injection libraries, hotpatch restores the execution of the process to its
+original state.
+
+The user can do the following with hotpatch:
+- load his/her own .so file into an already running process
+- invoke a custom symbol/function in that .so file
+- pass arguments to that function as long as it is serialized to the form of a
+  byte buffer and length of the buffer. This shall be explained more later.
+
+Hotpatch is available as an API with a header file called "hotpatch.h" and a
+.so file called "libhotpatch.so", and also a commandline application called
+"hotpatcher" which can inject .so files into processes via the commandline
+itself. Hotpatch also comes with a test .so called "libhotpatchtest.so"
+which can be used via the commandline "hotpatcher" application to test out
+the working of hotpatch on any system. The "libhotpatchtest.so" has a symbol
+"mysym" that can be invoked, and it writes to the "/tmp/hotpatchtest.log" file
+with the timestamp at which the .so file was injected and anything else.
+
+Limitations
+============
+NOTE: Currently it works only for x86-64-bit libraries and processes, and it will be
+made available to x86 (32-bit) applications in the next version.
+
+There are some limitations, the main being that the user can inject a library
+.so file only in a process on which the user has privileges over. For example,
+as the root user, hotpatch can inject libraries into any process, but as a
+regular non-root user, hotpatch can inject libraries into only those processes
+that hotpatch has access to, i.e. the user's processes and any other via sudo
+privileges.
+
+The other limitation is that if the user needs to compile his shared library
+with the linker options "-fPIC -nostartfiles" so that hotpatch can reliably load
+the .so file.
+
+Another limitation is that injection for a particular .so file can happen only
+once in the target process. Each library that is injected can be injected only
+once into the target process.
+
+Usage: API
+===========
+
+The "hotpatch.h" header file needs to be included by the user. There are 3 main
+API calls that matter. Each of them have to be called in the order as shown
+below in the sample program.
+
+- hotpatch_t *hotpatch_create(pid_t pid, int verbose);
+
+This function takes a PID of the target process, and the verbosity level
+(between 0 to 6), and returns an opaque object which contains further intimate
+details about the process such as current library mappings, and locations of the
+important functions needed for hotpatch to do its work.
+
+- int hotpatch_inject_library(hotpatch_t *hp,
+							  const char *sofile,
+							  const char *symbol,
+							  const unsigned char *data,
+							  size_t datalen,
+							  uintptr_t *out_addr,
+							  uintptr_t *out_result);
+
+This function takes the newly created hotpatch object, along with a path to the
+shared library in the variable "sofile", the optional function "symbol" to invoke,
+along with the serialized arguments to the function provided in "data" and
+"datalen" which are also optional. The return address of where the library was
+loaded is returned in "out_addr" and the return value of the invocation of
+"symbol" is returned in "out_result". On success this returns 0 and on failure
+returns -1.
+
+The verbosity levels can be adjusted accordingly from 0 to 6 to see debugging
+information for investigating errors.
+
+- void hotpatch_destroy(hotpatch_t *hp);
+
+This function cleans up memory and resources used by the hotpatch opaque object.
+
+Sample Program
+==============
+
+#include <hotpatch.h>
+
+int main(int argc, char **argv)
+{
+	pid_t pid = argc > 1 ? atoi(argv[1]) : 0;
+	hotpatch_t *hp = hotpatch_create(pid, 1);
+	if (hp) {
+		unsigned char *data = (unsigned char *)"my custom serialized data";
+		size_t datalen = strlen((char *)data) + 1;
+		uintptr_t result1, result2;
+		hotpatch_inject_library(hp, "libhotpatchtest.so", "mysym",
+						data, datalen, &result1, &result2);
+		hotpatch_destroy(hp);
+	}
+	return 0;
+}
+
+Usage: Hotpatcher
+==================
+
+The commandline "hotpatcher" can be executed with the "-h" option to see the
+various options that are supported.
+
+A sample execution of "hotpatcher" into the current running shell can be done as
+below:
+
+Let's say the library libhotpatchtest.so is in the current directory.
+
+bash> ./hotpatcher -l ./libhotpatchtest.so -s mysym -v1 $$
+
+On success the "/tmp/hotpatchtest.log" file can be checked if it has the
+timestamp of the injection.
+
+Uses of Hotpatch
+=================
+
 RUNTIME MODIFICATION OF RUNNING SOFTWARE APPLICATIONS USING DYNAMIC LIBRARY INJECTION BY ANOTHER PROCESS
 ================================================================================================
 Many software applications, that are not mission critical, are not built with mechanisms to update their software

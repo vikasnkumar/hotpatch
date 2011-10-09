@@ -549,20 +549,45 @@ static int hp_pokedata(pid_t pid, uintptr_t target, uintptr_t pokedata,
 }
 
 int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
+							const unsigned char *data, size_t datalen,
 							uintptr_t *outaddr)
 {
 	size_t dllsz = 0;
+	size_t symsz = 0;
+	size_t datasz = 0;
 	size_t tgtsz = 0;
 	int rc = 0;
-	if (!dll || !hp)
+	unsigned char *mdata = NULL;
+	if (!dll || !hp) {
+		fprintf(stderr, "[%s:%d] Invalid arguments.\n", __func__, __LINE__);
 		return -1;
-	if (!hp->fn_malloc || !hp->fn_dlopen)
+	}
+	if (!hp->fn_malloc || !hp->fn_dlopen) {
+		fprintf(stderr, "[%s:%d] No malloc/dlopen found.\n", __func__,
+				__LINE__);
 		return -1;
+	}
 	/* calculate the size to allocate */
 	dllsz = strlen(dll) + 1;
-	tgtsz = (dllsz > 1024) ? dllsz : 1024;
+	symsz = symbol ? (strlen(symbol) + 1) : 0;
+	datasz = data ? datalen : 0;
+	tgtsz = dllsz + symsz + datasz + 32; /* general buffer */
+	tgtsz = (tgtsz > 1024) ? tgtsz : 1024;
+	/* align the memory */
 	tgtsz += (tgtsz % sizeof(void *) == 0) ? 0 :
 			 (sizeof(void *) - (tgtsz % sizeof(void *)));
+	mdata = calloc(sizeof(unsigned char), tgtsz);
+	if (!mdata) {
+		LOG_ERROR_OUT_OF_MEMORY;
+		return -1;
+	}
+	memcpy(mdata, dll, dllsz);
+	if (symbol) {
+		memcpy(mdata + dllsz, symbol, symsz);
+	}
+	if (data) {
+		memcpy(mdata + dllsz + symsz, data, datasz);
+	}
 	if (hp->verbose > 0)
 		fprintf(stderr, "[%s:%d] Allocating %ld bytes in the target.\n",
 				__func__, __LINE__, tgtsz);
@@ -574,7 +599,6 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 		uintptr_t nullcode = 0;
 		uintptr_t result = 0;
 		uintptr_t stack = 0;
-		const unsigned char *udll = (const unsigned char *)dll;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Attaching to PID %d\n", __func__,
 					__LINE__, hp->pid);
@@ -623,11 +647,11 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 			break;
 		result = iregs.regs.rax;
 		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Copying data to 0x%lx.\n", __func__,
-					__LINE__, result);
+			fprintf(stderr, "[%s:%d] Copying %ld bytes to 0x%lx.\n", __func__,
+					__LINE__, tgtsz, result);
 		if (!result)
 			break;
-		if ((rc = hp_copydata(hp->pid, result, udll, dllsz, verbose)) < 0)
+		if ((rc = hp_copydata(hp->pid, result, mdata, tgtsz, verbose)) < 0)
 			break;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying Null code to stack.\n",
@@ -662,6 +686,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 				result);
 		if (outaddr)
 			*outaddr = result;
+		/* Original reset */
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Setting original registers.\n",
 					__func__, __LINE__);
@@ -691,10 +716,8 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 			rc = -1;
 		}
 	}
+	if (mdata)
+		free(mdata);
+	mdata = NULL;
 	return rc;
-}
-
-int hotpatch_create_pthread(hotpatch_t *hp, const char *dll, const char *symbol)
-{
-	return -1;
 }

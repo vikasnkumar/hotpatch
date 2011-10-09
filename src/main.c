@@ -170,7 +170,8 @@ int main(int argc, char **argv)
 			break;
 		if (opts.dll) {
 			uintptr_t res = 0;
-			rc = hotpatch_inject_library(hp, opts.dll, opts.symbol, &res);
+			rc = hotpatch_inject_library(hp, opts.dll, opts.symbol, NULL, 0,
+										 &res);
 			if (rc >=0) {
 				printf("Dll was injected at %p\n", (void *)res);
 			}

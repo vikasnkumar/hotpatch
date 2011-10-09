@@ -31,8 +31,10 @@
 #include <hotpatch_config.h>
 #include <hotpatch_internal.h>
 #include <hotpatch.h>
-#include <call32.h>
-#include <call64.h>
+#ifdef HOTPATCH_USE_ASM
+	#include <call32.h>
+	#include <call64.h>
+#endif
 
 #define LIB_LD "ld"
 #define LIB_C "libc"

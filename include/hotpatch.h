@@ -65,6 +65,26 @@ hotpatch_t *hotpatch_create(pid_t, int);
  * thread as create function above.
  */
 void hotpatch_destroy(hotpatch_t *hotpatch);
+/*
+ * Inject a shared object into the process and invoke the given symbol without
+ * arguments. No thread will be created by hotpatch.
+ * If the symbol is NULL, then _init() is expected to be in the library.
+ * If data is NULL, no data will be copied over to the other process for the
+ * symbol that is being invoked. If the symbol being invoked is _init(), then
+ * data will be ignored. This data and datalen will be provided as arguments to
+ * the symbol when invoked.
+ * The return address of the dlopen() call can be optionally returned in
+ * the outaddr variable.
+ * The return value from the invocation of the symbol in the process can be
+ * optionally returned in the outres variable. If the symbol is NULL, or if the
+ * symbol returns void, then the return value will be undefined.
+ */
+int hotpatch_inject_library(hotpatch_t *, const char *dll, const char *symbol,
+							const unsigned char *data, size_t datalen,
+							uintptr_t *outaddr, uintptr_t *outres);
+
+/* AUXILLIARY FUNCTIONS */
+
 /* finds the symbol in the symbol table of executable and returns the memory
  * location of it. On a 64-bit system the running process can be 32 or 64 bit,
  * and hence they both need to be handled correctly or even simultaneously.
@@ -92,23 +112,6 @@ int hotpatch_detach(hotpatch_t *);
  */
 int hotpatch_set_execution_pointer(hotpatch_t *, uintptr_t location);
 
-/*
- * Inject a shared object into the process and invoke the given symbol without
- * arguments. No thread will be created by hotpatch.
- * If the symbol is NULL, then _init() is expected to be in the library.
- * If data is NULL, no data will be copied over to the other process for the
- * symbol that is being invoked. If the symbol being invoked is _init(), then
- * data will be ignored. This data and datalen will be provided as arguments to
- * the symbol when invoked.
- * The return address of the dlopen() call can be optionally returned in
- * the outaddr variable.
- * The return value from the invocation of the symbol in the process can be
- * optionally returned in the outres variable. If the symbol is NULL, or if the
- * symbol returns void, then the return value will be undefined.
- */
-int hotpatch_inject_library(hotpatch_t *, const char *dll, const char *symbol,
-							const unsigned char *data, size_t datalen,
-							uintptr_t *outaddr, uintptr_t *outres);
 #ifdef __cplusplus
 } /* end of extern C */
 #endif /* __cplusplus */

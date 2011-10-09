@@ -2,7 +2,8 @@ Introduction to Hotpatch
 =========================
 Hotpatch is a library that can be used to dynamically load a shared library
 (.so) file on Linux from one process into another already running process,
-without affecting the execution of the target process.
+without affecting the execution of the target process. The API is a C API, but
+also supported in C++.
 
 The current version is 0.1.
 
@@ -85,6 +86,15 @@ returns -1.
 The verbosity levels can be adjusted accordingly from 0 to 6 to see debugging
 information for investigating errors.
 
+The usefulness of the "data" and "datalen" parameters is extremely high. Suppose
+the user has a custom function they want to invoke, and the arguments of the
+function is a big struct or a class. The user can then write a wrapper function
+that takes a serialized buffer of this struct/class along with the length of the
+buffer and invoke that wrapper function. This wrapper function can then
+deserialize this buffer into the struct/class as needed and call the actual
+function that the user really wanted to invoke. This functionality is only
+available by the API and not by the "hotpatcher" executable.
+
 - void hotpatch_destroy(hotpatch_t *hp);
 
 This function cleans up memory and resources used by the hotpatch opaque object.
@@ -127,35 +137,38 @@ timestamp of the injection.
 
 Uses of Hotpatch
 =================
+Most uses of hotpatch are related to custom modifications of processes for which
+the users do not have source code available.
 
-RUNTIME MODIFICATION OF RUNNING SOFTWARE APPLICATIONS USING DYNAMIC LIBRARY INJECTION BY ANOTHER PROCESS
-================================================================================================
-Many software applications, that are not mission critical, are not built with mechanisms to update their software
-without having to stop running the application and restarting it. Applications might also be in a state where updating
-them might not be possible because of unavailability of the application creators themselves. The users of such
-applications might want to modify the applications so that they can maximize usefulness of said applications. Cases
-might also arise where the user wants to be able to instrument parts of an application while in execution without having
-to recompile the application and be able to reproduce bugs in the application that are non-deterministic.
-A method to address all the above issues by modification of an application that is running in a process on an operating
-system in a computer, called the host process, by another process without restarting the host process is described here.
+- System administrators can use hotpatch to inject their own custom libraries in
+  already running processes and change behavior as per requirement. Some such
+behavior could be adding a library that creates a thread and heartbeats to a
+monitoring system.
 
-------
-Host process is running.
-Server process starts or is in running state, attaches itself to the host process via operating system primitives like a
-debugger, locates the runtime symbol table as described in the custom executable file format such as in the PE format on
-Windows and the ELF format on GNU/Linux. the server process first creates a thread in the host application and detaches
-itself. the thread that is now created in the host process is now part of the host process. this thread first retrieves
-the address of the executable pointer or the shared library pointer that it plans to modify, and then finds all
-references to those pointers except in itself.
+- Many software applications, that are not mission critical, are not built with
+  mechanisms to update their software without having to stop the application and
+restarting it. Hotpatch can help modify applications to restart and do other
+fancy tricks without losing the PID and the other states such as file handles of
+the applications that might be very useful or too risky to let go.
 
-It then goes forward and modifies the symbol table in all libraries to replace the given function names by the user to
-the new function names. this way after these changes have been made, the new functions get called instead of the old
-functions. This enables the host process to update itself but without having to have the updating logic within itself.
-The client process can be generic enough and can be used to update all the running processes thus avoiding programming
-updating logic into each process.
+- Users can inject a library and then set up RPC service calls for the target
+  application without changing any code.
 
-Another usage would be where users might want to invoke their functions before the host applications functions to
-instrument the host application while trying to either monitor performance, profile the application or even check memory
-leaks.
+- Users can inject a library and with import table modifications can instrument
+  the target application for things like profiling, reverse engineering and also
+debugging. This is useful as it does not necessarily need the application to be
+recompiled and performance numbers can be extracted. The code to do import table
+modifications is currently outside the scope of hotpatch.
 
-Needs to be done for Linux.
+- Users can create threads in other processes and make them work like a cluster
+  of processes that they control.
+
+- Users can modify another application and make it perform better by doing
+  tricks in the injected code.
+
+License & Copyright
+===================
+
+The license/copyright can be found in the COPYRIGHT document in the source code.
+
+==THE END==

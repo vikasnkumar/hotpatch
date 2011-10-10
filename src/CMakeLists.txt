@@ -60,8 +60,6 @@ if (USE_ASM)
 	add_dependencies(hotpatch asm_header)
 	add_dependencies(hotpatch_s asm_header)
 endif (USE_ASM)
-target_link_libraries(hotpatch ${HOTPATCH_DEP_LIBS})
-target_link_libraries(hotpatch_s ${HOTPATCH_DEP_LIBS})
 set_target_properties(hotpatch_s PROPERTIES OUTPUT_NAME "hotpatch"
 	CLEAN_DIRECT_OUTPUT 1)
 set_target_properties(hotpatch PROPERTIES CLEAN_DIRECT_OUTPUT 1)

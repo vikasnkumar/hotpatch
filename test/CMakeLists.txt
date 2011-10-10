@@ -33,7 +33,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(ptracetest ptrace.c)
-target_link_libraries(ptracetest ${HOTPATCH_DEP_LIBS})
 
 add_executable(dummy dummy.c)
 add_executable(loadertest loader.c)

@@ -32,6 +32,18 @@
 #include <hotpatch_internal.h>
 #include <hotpatch.h>
 
+#if __WORDSIZE == 64
+	typedef Elf64_Ehdr Elf_Ehdr;
+	typedef Elf64_Phdr Elf_Phdr;
+	typedef Elf64_Shdr Elf_Shdr;
+	typedef Elf64_Sym Elf_Sym;
+#else
+	typedef Elf32_Ehdr Elf_Ehdr;
+	typedef Elf32_Phdr Elf_Phdr;
+	typedef Elf32_Shdr Elf_Shdr;
+	typedef Elf32_Sym Elf_Sym;
+#endif
+
 enum {
 	HOTPATCH_SYMBOL_TYPE,
 	HOTPATCH_UNKNOWN
@@ -178,8 +190,8 @@ static int exe_elf_identify(unsigned char *e_ident, size_t size, int verbose)
 	return HOTPATCH_EXE_IS_NEITHER;
 }
 
-static int exe_load_symbol_table(struct elf_internals *ei, Elf64_Shdr *symh,
-								 Elf64_Shdr *strh, int verbose)
+static int exe_load_symbol_table(struct elf_internals *ei, Elf_Shdr *symh,
+								 Elf_Shdr *strh, int verbose)
 {
 	char *strsymtbl = NULL;
 	size_t strsymtbl_size = 0;
@@ -204,7 +216,7 @@ static int exe_load_symbol_table(struct elf_internals *ei, Elf64_Shdr *symh,
 		if (symh->sh_entsize > 0 && symh->sh_size > 0) {
 			size_t idx;
 			size_t sym_num = symh->sh_size / symh->sh_entsize;
-			Elf64_Sym *syms = malloc(symh->sh_size);
+			Elf_Sym *syms = malloc(symh->sh_size);
 			if (!syms) {
 				LOG_ERROR_OUT_OF_MEMORY;
 				break;
@@ -269,8 +281,8 @@ static int exe_load_symbol_table(struct elf_internals *ei, Elf64_Shdr *symh,
 
 static int exe_load_section_headers(struct elf_internals *ei, int verbose)
 {
-	Elf64_Shdr *strsectblhdr = NULL;
-	Elf64_Shdr *sechdrs = NULL;
+	Elf_Shdr *strsectblhdr = NULL;
+	Elf_Shdr *sechdrs = NULL;
 	size_t idx = 0;
 	ssize_t symtab = -1;
 	ssize_t strtab = -1;
@@ -297,7 +309,7 @@ static int exe_load_section_headers(struct elf_internals *ei, int verbose)
 		LOG_ERROR_FILE_READ;
 		return -1;
 	}
-	sechdrs = (Elf64_Shdr *)ei->sechdrs;
+	sechdrs = (Elf_Shdr *)ei->sechdrs;
 	strsectblhdr = &sechdrs[ei->secnametbl_idx];
 	if (lseek(ei->fd, strsectblhdr->sh_offset, SEEK_SET) < 0) {
 		LOG_ERROR_FILE_SEEK;
@@ -362,7 +374,7 @@ static int exe_load_section_headers(struct elf_internals *ei, int verbose)
 
 static int exe_load_program_headers(struct elf_internals *ei, int verbose)
 {
-	Elf64_Phdr *proghdrs = NULL;
+	Elf_Phdr *proghdrs = NULL;
 	size_t idx = 0;
 	int rc = 0;
 	if (!ei || ei->proghdr_offset == 0 || ei->proghdr_size == 0)
@@ -384,7 +396,7 @@ static int exe_load_program_headers(struct elf_internals *ei, int verbose)
 	if (verbose > 3)
 		fprintf(stderr, "[%s:%d] Number of segments: %ld\n", __func__, __LINE__,
 				ei->proghdr_num);
-	proghdrs = (Elf64_Phdr *)ei->proghdrs;
+	proghdrs = (Elf_Phdr *)ei->proghdrs;
 	for (idx = 0; idx < ei->proghdr_num; ++idx) {
 		rc = 0;
 		if (verbose > 2) {
@@ -443,7 +455,7 @@ static int exe_load_program_headers(struct elf_internals *ei, int verbose)
 
 static int exe_load_headers(struct elf_internals *ei, int verbose)
 {
-	Elf64_Ehdr hdr;
+	Elf_Ehdr hdr;
 	int fd = -1;
 	if (!ei) {
 		return -1;
@@ -459,36 +471,39 @@ static int exe_load_headers(struct elf_internals *ei, int verbose)
 		return -1;
 	}
 	if (verbose > 3)
-		fprintf(stderr, "[%s:%d] Reading Elf64 header.\n", __func__, __LINE__);
+		fprintf(stderr, "[%s:%d] Reading Elf header.\n", __func__, __LINE__);
 	ei->is64 = exe_elf_identify(hdr.e_ident, EI_NIDENT, verbose);
 	switch (ei->is64) {
 	case HOTPATCH_EXE_IS_64BIT:
 		if (verbose > 3)
 			fprintf(stderr, "[%s:%d] 64-bit valid exe\n", __func__, __LINE__);
-		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Entry point %p\n", __func__, __LINE__,
-				(void *)hdr.e_entry);
-		ei->entry_point = (uintptr_t)hdr.e_entry;
-		if (hdr.e_machine != EM_X86_64) {
-			LOG_ERROR_UNSUPPORTED_PROCESSOR;
-			return -1;
-		}
-		if (hdr.e_shoff > 0) {
-			ei->sechdr_offset = 0 + hdr.e_shoff;
-			ei->sechdr_num = 0 + hdr.e_shnum;
-			ei->sechdr_size = 0 + hdr.e_shnum * hdr.e_shentsize;
-			ei->secnametbl_idx = 0 + hdr.e_shstrndx;
-		}
-		if (hdr.e_phoff > 0) {
-			ei->proghdr_offset = 0 + hdr.e_phoff;
-			ei->proghdr_num = 0 + hdr.e_phnum;
-			ei->proghdr_size = 0 + hdr.e_phnum * hdr.e_phentsize;
-		}
 		break;
 	case HOTPATCH_EXE_IS_32BIT:
+		if (verbose > 3)
+			fprintf(stderr, "[%s:%d] 32-bit valid exe\n", __func__, __LINE__);
+		break;
 	case HOTPATCH_EXE_IS_NEITHER:
 	default:
 		return -1;
+	}
+	if (verbose > 1)
+		fprintf(stderr, "[%s:%d] Entry point %p\n", __func__, __LINE__,
+				(void *)hdr.e_entry);
+	ei->entry_point = (uintptr_t)hdr.e_entry;
+	if (hdr.e_machine != EM_X86_64) {
+		LOG_ERROR_UNSUPPORTED_PROCESSOR;
+		return -1;
+	}
+	if (hdr.e_shoff > 0) {
+		ei->sechdr_offset = 0 + hdr.e_shoff;
+		ei->sechdr_num = 0 + hdr.e_shnum;
+		ei->sechdr_size = 0 + hdr.e_shnum * hdr.e_shentsize;
+		ei->secnametbl_idx = 0 + hdr.e_shstrndx;
+	}
+	if (hdr.e_phoff > 0) {
+		ei->proghdr_offset = 0 + hdr.e_phoff;
+		ei->proghdr_num = 0 + hdr.e_phnum;
+		ei->proghdr_size = 0 + hdr.e_phnum * hdr.e_phentsize;
 	}
 	if (exe_load_section_headers(ei, verbose) < 0) {
 		fprintf(stderr, "[%s:%d] Error in loading section headers\n",

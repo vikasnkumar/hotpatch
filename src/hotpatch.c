@@ -520,14 +520,20 @@ static int hp_pokedata(pid_t pid, uintptr_t target, uintptr_t pokedata,
 
 int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
 {
-#undef HP_INTXNPTR_STR
-#undef HP_INTXNPTR
+#undef HP_REG_IP_STR
+#undef HP_REG_IP
+#undef HP_REG_SP
+#undef HP_REG_AX
 #if __WORDSIZE == 64
-	#define HP_INTXNPTR_STR "RIP"
-	#define HP_INTXNPTR(A) A.regs.rip
+	#define HP_REG_IP_STR "RIP"
+	#define HP_REG_IP(A) A.regs.rip
+	#define HP_REG_SP(A) A.regs.rsp
+	#define HP_REG_AX(A) A.regs.rax
 #else
-	#define HP_INTXNPTR_STR "EIP"
-	#define HP_INTXNPTR(A) A.regs.eip
+	#define HP_REG_IP_STR "EIP"
+	#define HP_REG_IP(A) A.regs.eip
+	#define HP_REG_SP(A) A.regs.esp
+	#define HP_REG_AX(A) A.regs.eax
 #endif
 	int rc = -1;
 	if (ptr && hp && hp->attached) {
@@ -540,19 +546,19 @@ int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
 		} else {
 			if (hp->verbose > 1)
 				fprintf(stderr, "[%s:%d] %s is %p\n", __func__, __LINE__,
-						HP_INTXNPTR_STR,
-						(void *)HP_INTXNPTR(regs));
+						HP_REG_IP_STR,
+						(void *)HP_REG_IP(regs));
 			if (ptr == hp->exe_entry_point)
 				ptr += sizeof(void *);
-			HP_INTXNPTR(regs) = ptr;
+			HP_REG_IP(regs) = ptr;
 			if (ptrace(PTRACE_SETREGS, hp->pid, NULL, &regs) < 0) {
 				int err = errno;
 				fprintf(stderr, "[%s:%d] Ptrace setregs failed with error %s\n",
 						__func__, __LINE__, strerror(err));
 			} else {
 				if (hp->verbose > 0)
-					fprintf(stderr, "[%s:%d] Set RIP to 0x"LX"\n", __func__,
-							__LINE__, ptr);
+					fprintf(stderr, "[%s:%d] Set %s to 0x"LX"\n",
+							__func__, __LINE__, HP_REG_IP_STR, ptr);
 				rc = 0;
 			}
 		}
@@ -630,7 +636,7 @@ do { \
 		fprintf(stderr, "[%s:%d] Copying Null code to stack.\n", \
 			__func__, __LINE__); \
 	nullcode = 0; \
-	if ((rc = hp_pokedata(hp->pid, HP_INTXNPTR(iregs), nullcode, verbose)) < 0) \
+	if ((rc = hp_pokedata(hp->pid, HP_REG_SP(iregs), nullcode, verbose)) < 0) \
 		break; \
 } while (0)
 
@@ -655,7 +661,6 @@ do { \
 		break; \
 } while (0)
 #if __WORDSIZE == 64
-	#define HP_RESULT(A) A.regs.rax
 	#define HP_PASS_ARGS2FUNC(A,FN,ARG1,ARG2) \
 	do { \
 		A.regs.rsi = ARG2; \
@@ -664,9 +669,22 @@ do { \
 		A.regs.rax = 0; \
 	} while (0)
 #else /* __WORDSIZE == 64 */
-	#define HP_RESULT(A) A.regs.eax
-	#define HP_PASS_ARGS2FUNC(A,fn,a1,a2) \
+	#define HP_PASS_ARGS2FUNC(A,FN,ARG1,ARG2) \
 	do { \
+		if (verbose > 1) \
+			fprintf(stderr, "[%s:%d] Copying Arg 1 to stack.\n", \
+				__func__, __LINE__); \
+		if ((rc = hp_pokedata(hp->pid, HP_REG_SP(iregs) + sizeof(size_t), \
+							  ARG1, verbose)) < 0) \
+			break; \
+		if (verbose > 1) \
+			fprintf(stderr, "[%s:%d] Copying Arg 2 to stack.\n", \
+				__func__, __LINE__); \
+		if ((rc = hp_pokedata(hp->pid, HP_REG_SP(iregs) + 2 * sizeof(size_t), \
+							  ARG2, verbose)) < 0) \
+			break; \
+		A.regs.eip = FN; \
+		A.regs.eax = 0; \
 	} while (0)
 #endif /* __WORDSIZE == 64 */
 		/* Prepare the child for injection */
@@ -687,14 +705,14 @@ do { \
 		memcpy(&iregs, &oregs, sizeof(oregs));
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying stack out.\n", __func__, __LINE__);
-		if ((rc = hp_peekdata(hp->pid, HP_INTXNPTR(iregs), &stack, verbose)) < 0)
+		if ((rc = hp_peekdata(hp->pid, HP_REG_SP(iregs), &stack, verbose)) < 0)
 			break;
 		/* Call malloc */
 		HP_NULLIFYSTACK();
 		HP_PASS_ARGS2FUNC(iregs, hp->fn_malloc, tgtsz, 0);
 		HP_SETEXECWAITGET("malloc");
-		result = HP_RESULT(iregs);
-		heapptr = HP_RESULT(iregs); /* keep a copy of this pointer */
+		result = HP_REG_AX(iregs);
+		heapptr = HP_REG_AX(iregs); /* keep a copy of this pointer */
 		/* Copy data to the malloced area */
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying "LU" bytes to 0x"LX".\n", __func__,
@@ -708,7 +726,7 @@ do { \
 		HP_PASS_ARGS2FUNC(iregs, hp->fn_dlopen, result /* value from malloc */,
 					(RTLD_LAZY | RTLD_GLOBAL));
 		HP_SETEXECWAITGET("dlopen");
-		result = HP_RESULT(iregs);
+		result = HP_REG_AX(iregs);
 		if (verbose > 0)
 			fprintf(stderr, "[%s:%d] Dll opened at 0x"LX"\n", __func__, __LINE__,
 				result);
@@ -721,7 +739,7 @@ do { \
 					result /* value from dlopen */,
 					(heapptr + dllsz));
 			HP_SETEXECWAITGET("dlsym");
-			result = HP_RESULT(iregs);
+			result = HP_REG_AX(iregs);
 			if (verbose > 0)
 				fprintf(stderr, "[%s:%d] Symbol %s found at 0x"LX"\n",
 						__func__, __LINE__, symbol, result);
@@ -735,7 +753,7 @@ do { \
 								0, 0);
 				}
 				HP_SETEXECWAITGET(symbol);
-				result = HP_RESULT(iregs);
+				result = HP_REG_AX(iregs);
 				if (verbose > 0)
 					fprintf(stderr, "[%s:%d] Return value from invoking %s(): %p\n",
 							__func__, __LINE__, symbol, (void *)result);
@@ -771,7 +789,7 @@ do { \
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying stack back.\n",
 					__func__, __LINE__);
-		if ((rc = hp_pokedata(hp->pid, HP_INTXNPTR(oregs), stack, verbose)) < 0)
+		if ((rc = hp_pokedata(hp->pid, HP_REG_SP(oregs), stack, verbose)) < 0)
 			break;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Executing...\n", __func__, __LINE__);
@@ -795,7 +813,9 @@ do { \
 #undef HP_PASS_ARGS2FUNC
 #undef HP_SETEXECWAITGET
 #undef HP_NULLIFYSTACK
-#undef HP_INTXNPTR_STR
-#undef HP_INTXNPTR
+#undef HP_REG_IP_STR
+#undef HP_REG_IP
+#undef HP_REG_SP
+#undef HP_REG_AX
 	return rc;
 }

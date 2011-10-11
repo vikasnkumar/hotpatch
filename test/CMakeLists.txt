@@ -32,7 +32,9 @@ project(unit_tests)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
+if (ARCH STREQUAL "x86_64")
 add_executable(ptracetest ptrace.c)
+endif (ARCH STREQUAL "x86_64")
 
 add_executable(dummy dummy.c)
 add_executable(loadertest loader.c)
@@ -46,9 +48,6 @@ add_test(compiletestcpp ${CMAKE_CURRENT_BINARY_DIR}/compiletestcpp)
 add_executable(compiletestc ctest.c)
 target_link_libraries(compiletestc hotpatch)
 add_test(compiletestc ${CMAKE_CURRENT_BINARY_DIR}/compiletestc)
-
-add_executable(asmtest asmtest.c)
-add_test(asmtest ${CMAKE_CURRENT_BINARY_DIR}/asmtest)
 
 add_library(hotpatchtest SHARED dlltest.c)
 set_target_properties(hotpatchtest PROPERTIES LINK_FLAGS "-fPIC -nostartfiles")

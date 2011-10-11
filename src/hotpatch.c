@@ -80,7 +80,7 @@ do { \
 	outfn = ld_find_address(&hp->libs[HOTPATCH_##index], fn, verbose); \
 	if (outfn != 0) { \
 		if (verbose > 0) \
-			fprintf(stderr, "[%s:%d] Found %s at 0x%lx in %s\n", \
+			fprintf(stderr, "[%s:%d] Found %s at 0x"LX" in %s\n", \
 					__func__, __LINE__, fn, outfn, index); \
 	} else { \
 		if (verbose > 0) \
@@ -152,6 +152,14 @@ do { \
 #undef LD_PROCMAPS_FIND_LIB
 #undef LD_LIB_FIND_FN_ADDR
 	return 0;
+}
+
+void hotpatch_version(int *major, int *minor)
+{
+	if (major)
+		*major = HOTPATCH_MAJOR_VERSION;
+	if (minor)
+		*minor = HOTPATCH_MINOR_VERSION;
 }
 
 hotpatch_t *hotpatch_create(pid_t pid, int verbose)
@@ -273,7 +281,7 @@ uintptr_t hotpatch_read_symbol(hotpatch_t *hp, const char *symbol, int *type, si
 		const char *name = hp->exe_symbols[idx].name;
 		if (strcmp(name, symbol) == 0) {
 			if (hp->verbose > 1)
-				fprintf(stderr, "[%s:%d] Found %s in symbol list at %ld\n",
+				fprintf(stderr, "[%s:%d] Found %s in symbol list at "LU"\n",
 						__func__, __LINE__, symbol, idx);
 			ptr = hp->exe_symbols[idx].address;
 			if (type)
@@ -284,7 +292,7 @@ uintptr_t hotpatch_read_symbol(hotpatch_t *hp, const char *symbol, int *type, si
 		}
 	}
 	if (hp->verbose > 2)
-		fprintf(stderr, "[%s:%d] Symbol %s has address 0x%lx\n", __func__,
+		fprintf(stderr, "[%s:%d] Symbol %s has address 0x"LX"\n", __func__,
 				__LINE__, symbol, ptr);
 	return ptr;
 }
@@ -363,46 +371,6 @@ int hotpatch_detach(hotpatch_t *hp)
 	return rc;
 }
 
-int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
-{
-	int rc = -1;
-	if (ptr && hp && hp->attached) {
-		struct user regs;
-		memset(&regs, 0, sizeof(regs));
-		if (ptrace(PTRACE_GETREGS, hp->pid, NULL, &regs) < 0) {
-			int err = errno;
-			fprintf(stderr, "[%s:%d] Ptrace getregs failed with error %s\n",
-					__func__, __LINE__, strerror(err));
-		} else {
-			if (hp->verbose > 1)
-				fprintf(stderr, "[%s:%d] RIP is 0x%lx\n", __func__, __LINE__,
-						regs.regs.rip);
-			if (ptr == hp->exe_entry_point)
-				ptr += sizeof(void *);
-			regs.regs.rip = ptr;
-			if (ptrace(PTRACE_SETREGS, hp->pid, NULL, &regs) < 0) {
-				int err = errno;
-				fprintf(stderr, "[%s:%d] Ptrace setregs failed with error %s\n",
-						__func__, __LINE__, strerror(err));
-			} else {
-				if (hp->verbose > 0)
-					fprintf(stderr, "[%s:%d] Set RIP to 0x%lx\n", __func__,
-							__LINE__, ptr);
-				rc = 0;
-			}
-		}
-	} else {
-		if (!ptr) {
-			fprintf(stderr, "[%s:%d] The execution pointer is null.\n",
-					__func__, __LINE__);
-		}
-		if (!hp || !hp->attached) {
-			fprintf(stderr, "[%s:%d] The process is not attached to.\n",
-					__func__, __LINE__);
-		}
-	}
-	return rc;
-}
 
 static int hp_attach(pid_t pid)
 {
@@ -550,6 +518,8 @@ static int hp_pokedata(pid_t pid, uintptr_t target, uintptr_t pokedata,
 	return 0;
 }
 
+#if __WORDSIZE == 64
+
 int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 							const unsigned char *data, size_t datalen,
 							uintptr_t *outaddr, uintptr_t *outres)
@@ -591,7 +561,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 		memcpy(mdata + dllsz + symsz, data, datasz);
 	}
 	if (hp->verbose > 0)
-		fprintf(stderr, "[%s:%d] Allocating %ld bytes in the target.\n",
+		fprintf(stderr, "[%s:%d] Allocating "LU" bytes in the target.\n",
 				__func__, __LINE__, tgtsz);
 	do {
 		/* The stack is read-write and not executable */
@@ -665,7 +635,7 @@ do { \
 		heapptr = iregs.regs.rax; /* keep a copy of this pointer */
 		/* Copy data to the malloced area */
 		if (verbose > 1)
-			fprintf(stderr, "[%s:%d] Copying %ld bytes to 0x%lx.\n", __func__,
+			fprintf(stderr, "[%s:%d] Copying "LU" bytes to 0x"LX".\n", __func__,
 					__LINE__, tgtsz, result);
 		if (!result)
 			break;
@@ -680,7 +650,7 @@ do { \
 		HP_SETEXECWAITGET("dlopen");
 		result = iregs.regs.rax;
 		if (verbose > 0)
-			fprintf(stderr, "[%s:%d] Dll opened at 0x%lx\n", __func__, __LINE__,
+			fprintf(stderr, "[%s:%d] Dll opened at 0x"LX"\n", __func__, __LINE__,
 				result);
 		if (outaddr)
 			*outaddr = result;
@@ -694,7 +664,7 @@ do { \
 			HP_SETEXECWAITGET("dlsym");
 			result = iregs.regs.rax;
 			if (verbose > 0)
-				fprintf(stderr, "[%s:%d] Symbol %s found at 0x%lx\n",
+				fprintf(stderr, "[%s:%d] Symbol %s found at 0x"LX"\n",
 						__func__, __LINE__, symbol, result);
 			if (result != 0) {
 				HP_NULLIFYSTACK();
@@ -770,10 +740,59 @@ do { \
 	return rc;
 }
 
-void hotpatch_version(int *major, int *minor)
+int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
 {
-	if (major)
-		*major = HOTPATCH_MAJOR_VERSION;
-	if (minor)
-		*minor = HOTPATCH_MINOR_VERSION;
+	int rc = -1;
+	if (ptr && hp && hp->attached) {
+		struct user regs;
+		memset(&regs, 0, sizeof(regs));
+		if (ptrace(PTRACE_GETREGS, hp->pid, NULL, &regs) < 0) {
+			int err = errno;
+			fprintf(stderr, "[%s:%d] Ptrace getregs failed with error %s\n",
+					__func__, __LINE__, strerror(err));
+		} else {
+			if (hp->verbose > 1)
+				fprintf(stderr, "[%s:%d] RIP is 0x"LX"\n", __func__, __LINE__,
+						regs.regs.rip);
+			if (ptr == hp->exe_entry_point)
+				ptr += sizeof(void *);
+			regs.regs.rip = ptr;
+			if (ptrace(PTRACE_SETREGS, hp->pid, NULL, &regs) < 0) {
+				int err = errno;
+				fprintf(stderr, "[%s:%d] Ptrace setregs failed with error %s\n",
+						__func__, __LINE__, strerror(err));
+			} else {
+				if (hp->verbose > 0)
+					fprintf(stderr, "[%s:%d] Set RIP to 0x"LX"\n", __func__,
+							__LINE__, ptr);
+				rc = 0;
+			}
+		}
+	} else {
+		if (!ptr) {
+			fprintf(stderr, "[%s:%d] The execution pointer is null.\n",
+					__func__, __LINE__);
+		}
+		if (!hp || !hp->attached) {
+			fprintf(stderr, "[%s:%d] The process is not attached to.\n",
+					__func__, __LINE__);
+		}
+	}
+	return rc;
 }
+
+#else /* __WORDSIZE == 64 */
+
+int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
+{
+	return -1;
+}
+
+int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
+							const unsigned char *data, size_t datalen,
+							uintptr_t *outaddr, uintptr_t *outres)
+{
+	return -1;
+}
+
+#endif /* __WORDSIZE == 64 */

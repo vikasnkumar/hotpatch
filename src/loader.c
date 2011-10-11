@@ -71,13 +71,14 @@ void ld_procmaps_dump(struct ld_procmaps *pm)
         return;
     fprintf(stderr, "[%s:%d] Pathname: %s\n", __func__, __LINE__,
 			pm->pathname ? pm->pathname : "Unknown");
-    fprintf(stderr, "[%s:%d] Address Start: %lx End: %lx Valid:"
-					" %d Offset: %ld\n", __func__, __LINE__,
-			pm->addr_begin, pm->addr_end, pm->addr_valid, pm->offset);
+    fprintf(stderr, "[%s:%d] Address Start: "LX" End: "LX" Valid:"
+					" %d Offset: "LU"\n", __func__, __LINE__,
+			pm->addr_begin, pm->addr_end, pm->addr_valid,
+			(size_t)pm->offset);
     fprintf(stderr, "[%s:%d] Device Major: %d Minor: %d\n",
 			__func__, __LINE__, pm->device_major, pm->device_minor);
-    fprintf(stderr, "[%s:%d] Inode: %ld\n", __func__, __LINE__,
-			pm->inode);
+    fprintf(stderr, "[%s:%d] Inode: "LU"\n", __func__, __LINE__,
+			(size_t)pm->inode);
     fprintf(stderr, "[%s:%d] Permissions: Read(%d) Write(%d) "
 					"Execute(%d) Private(%d) Shared(%d)\n",
 			__func__, __LINE__,
@@ -87,7 +88,7 @@ void ld_procmaps_dump(struct ld_procmaps *pm)
             (pm->permissions & PROCMAPS_PERMS_PRIVATE) ? 1 : 0,
 			(pm->permissions & PROCMAPS_PERMS_SHARED) ? 1 : 0
 	);
-    fprintf(stderr, "[%s:%d] Pathname length: %ld\n", __func__, __LINE__,
+    fprintf(stderr, "[%s:%d] Pathname length: "LU"\n", __func__, __LINE__,
 			pm->pathname_sz);
     fprintf(stderr, "[%s:%d] Filetype: %d\n", __func__, __LINE__,
 			pm->filetype);
@@ -273,7 +274,7 @@ struct ld_procmaps *ld_load_maps(pid_t pid, int verbose, size_t *num)
 		while (fgets(buf, bufsz, ff))
 			mapmax++;
 		if (verbose > 0)
-			fprintf(stderr, "[%s:%d] Max number of mappings present: %ld\n",
+			fprintf(stderr, "[%s:%d] Max number of mappings present: "LU"\n",
 					__func__, __LINE__, mapmax);
 		fseek(ff, 0L, SEEK_SET);
 		maps = calloc(sizeof(*maps), mapmax);
@@ -432,7 +433,7 @@ int ld_find_library(const struct ld_procmaps *maps, const size_t mapnum,
 			}
 			if (found) {
 				if (verbose > 2)
-					fprintf(stderr, "[%s:%d] Found index (%ld) matching.\n",
+					fprintf(stderr, "[%s:%d] Found index ("LU") matching.\n",
 							__func__, __LINE__, idx);
 				if (verbose > 0)
 					fprintf(stderr, "[%s:%d] Found entry %s matching %s\n",
@@ -484,14 +485,14 @@ uintptr_t ld_find_address(const struct ld_library *lib, const char *symbol,
 		if (syms && syms_num > 0) {
 			size_t idx = 0;
 			if (verbose > 1)
-				fprintf(stderr, "[%s:%d] %ld symbols found in %s\n",
+				fprintf(stderr, "[%s:%d] "LU" symbols found in %s\n",
 						__func__, __LINE__, syms_num, lib->pathname);
 			qsort(syms, syms_num, sizeof(*syms), elf_symbol_cmpqsort);
 			for (idx = 0; idx < syms_num; ++idx) {
 				if (strcmp(symbol, syms[idx].name) == 0) {
 					if (verbose > 2)
 						fprintf(stderr, "[%s:%d] Found %s in symbol list at "
-								"%ld with address offset %lx\n", __func__,
+								""LU" with address offset "LX"\n", __func__,
 								__LINE__, symbol, idx, syms[idx].address);
 					ptr = syms[idx].address + lib->addr_begin;
 					break;

@@ -199,7 +199,7 @@ int main(int argc, char **argv)
 				printf("Symbol %s not found. Cannot proceed\n", opts.symbol);
 				break;
 			}
-			printf("Setting execution pointer to %s at 0x%lx\n", opts.symbol, ptr);
+			printf("Setting execution pointer to %s at 0x"LX"\n", opts.symbol, ptr);
 			rc = hotpatch_attach(hp);
 			if (rc < 0) {
 				printf("Failed to attach to process. Cannot proceed\n");
@@ -207,7 +207,7 @@ int main(int argc, char **argv)
 			}
 			rc = hotpatch_set_execution_pointer(hp, ptr);
 			if (rc < 0) {
-				printf("Failed to set execution pointer to 0x%lx\n", ptr);
+				printf("Failed to set execution pointer to 0x"LX"\n", ptr);
 				rc = hotpatch_detach(hp);
 				break;
 			}

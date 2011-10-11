@@ -41,7 +41,7 @@ do { \
 	if (ff) { \
 		fprintf(ff, "Dll opened. %s\n", ctime(&tt)); \
 		if (L > 0) \
-			fprintf(ff, "Data: %s Len: %ld\n", (char *)D, (size_t)L); \
+			fprintf(ff, "Data: %s Len: "LU"\n", (char *)D, (size_t)L); \
 		fclose(ff); \
 	} \
 } while (0)

@@ -252,7 +252,7 @@ static int exe_load_symbol_table(struct elf_internals *ei, Elf_Shdr *symh,
 									HOTPATCH_SYMBOL_TYPE);
 					if (verbose > 2)
 						fprintf(stderr,
-							"[%s:%d] Symbol %ld is %s at %p type %d size %ld\n",
+							"[%s:%d] Symbol "LU" is %s at %p type %d size "LU"\n",
 							__func__, __LINE__, idx, name,
 							(void *)syms[idx].st_value, symtype,
 							syms[idx].st_size);
@@ -299,8 +299,8 @@ static int exe_load_section_headers(struct elf_internals *ei, int verbose)
 	}
 	memset(ei->sechdrs, 0, ei->sechdr_size);
 	if (verbose > 3)
-		fprintf(stderr, "[%s:%d] Reading section header offset at %ld\n",
-				__func__, __LINE__, ei->sechdr_offset);
+		fprintf(stderr, "[%s:%d] Reading section header offset at "LU"\n",
+				__func__, __LINE__, (size_t)ei->sechdr_offset);
 	if (lseek(ei->fd, ei->sechdr_offset, SEEK_SET) < 0) {
 		LOG_ERROR_FILE_SEEK;
 		return -1;
@@ -326,17 +326,17 @@ static int exe_load_section_headers(struct elf_internals *ei, int verbose)
 		return -1;
 	}
 	if (verbose > 3)
-		fprintf(stderr, "[%s:%d] Number of sections: %ld\n", __func__, __LINE__,
+		fprintf(stderr, "[%s:%d] Number of sections: "LU"\n", __func__, __LINE__,
 				ei->sechdr_num);
 	for (idx = 0; idx < ei->sechdr_num; ++idx) {
 		const char *name = &ei->strsectbl[sechdrs[idx].sh_name];
 		if (verbose > 2) {
 			if (name)
-				fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: %ld\n",
+				fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: "LU"\n",
 						__func__, __LINE__, name, (void *)sechdrs[idx].sh_offset,
 						sechdrs[idx].sh_size);
 			else
-				fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: %ld\n",
+				fprintf(stderr, "[%s:%d] Section name: %s Addr: %p Len: "LU"\n",
 						__func__, __LINE__, "N/A", (void *)sechdrs[idx].sh_offset,
 						sechdrs[idx].sh_size);
 		}
@@ -345,8 +345,8 @@ static int exe_load_section_headers(struct elf_internals *ei, int verbose)
 		case SHT_DYNSYM:
 			symtab = idx;
 			if (verbose > 3)
-				fprintf(stderr, "[%s:%d] Symbol table offset: %ld size: %ld "
-						"entsize: %ld entries: %ld\n",
+				fprintf(stderr, "[%s:%d] Symbol table offset: "LU" size: "LU" "
+						"entsize: "LU" entries: "LU"\n",
 				__func__, __LINE__, sechdrs[idx].sh_offset,
 				sechdrs[idx].sh_size, sechdrs[idx].sh_entsize,
 				(sechdrs[idx].sh_entsize > 0 ? sechdrs[idx].sh_size / sechdrs[idx].sh_entsize : 0));
@@ -394,15 +394,15 @@ static int exe_load_program_headers(struct elf_internals *ei, int verbose)
 		return -1;
 	}
 	if (verbose > 3)
-		fprintf(stderr, "[%s:%d] Number of segments: %ld\n", __func__, __LINE__,
+		fprintf(stderr, "[%s:%d] Number of segments: "LU"\n", __func__, __LINE__,
 				ei->proghdr_num);
 	proghdrs = (Elf_Phdr *)ei->proghdrs;
 	for (idx = 0; idx < ei->proghdr_num; ++idx) {
 		rc = 0;
 		if (verbose > 2) {
 			fprintf(stderr,
-					"[%s:%d] Prog-header %ld: Type: %d "
-					"VAddr: %p PAddr: %p FileSz: %ld MemSz: %ld\n",
+					"[%s:%d] Prog-header "LU": Type: %d "
+					"VAddr: %p PAddr: %p FileSz: "LU" MemSz: "LU"\n",
 					__func__, __LINE__, idx, proghdrs[idx].p_type,
 					(void *)proghdrs[idx].p_vaddr,
 					(void *)proghdrs[idx].p_paddr,
@@ -437,7 +437,7 @@ static int exe_load_program_headers(struct elf_internals *ei, int verbose)
 			ei->interp.length = proghdrs[idx].p_filesz;
 			ei->interp.ph_addr = proghdrs[idx].p_vaddr;
 			if (verbose > 1)
-				fprintf(stderr, "[%s:%d] Found %s at V-Addr 0x%lx\n",
+				fprintf(stderr, "[%s:%d] Found %s at V-Addr 0x"LX"\n",
 						__func__, __LINE__, ei->interp.name,
 						ei->interp.ph_addr);
 		} else if (proghdrs[idx].p_type == PT_DYNAMIC) {

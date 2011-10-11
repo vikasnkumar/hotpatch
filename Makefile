@@ -29,6 +29,7 @@
 ###
 CMAKE=/usr/bin/cmake
 PREFIX=/usr/local
+ARCH=$(shell uname -m)
 
 default: release
 .PHONY: default
@@ -47,14 +48,14 @@ install: installrelease
 
 release:
 	@mkdir -p Release
-	@cd Release && $(CMAKE) -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(PREFIX) ..
+	@cd Release && $(CMAKE) -DARCH=$(ARCH) -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(PREFIX) ..
 	@cd Release && $(MAKE)
 	@echo "Release Build complete"
 .PHONY: release
 
 debug:
 	@mkdir -p Debug
-	@cd Debug && $(CMAKE) -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=$(PREFIX) ..
+	@cd Debug && $(CMAKE) -DARCH=$(ARCH) -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=$(PREFIX) ..
 	@cd Debug && $(MAKE)
 	@echo "Debug Build complete"
 .PHONY: debug
@@ -80,13 +81,13 @@ testdebug: debug
 .PHONY: testdebug
 
 installrelease: release
-	@cd Release && $(CMAKE) -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(PREFIX) ..
+	@cd Release && $(CMAKE) -DARCH=$(ARCH) -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(PREFIX) ..
 	@cd Release && $(MAKE) install
 	@echo "Release installation complete"
 .PHONY: installrelease
 
 installdebug: debug
-	@cd Debug && $(CMAKE) -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=$(PREFIX) ..
+	@cd Debug && $(CMAKE) -DARCH=$(ARCH) -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=$(PREFIX) ..
 	@cd Debug && $(MAKE) install
 	@echo "Debug installation complete"
 .PHONY: installdebug

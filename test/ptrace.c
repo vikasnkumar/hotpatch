@@ -77,7 +77,7 @@ int main(int argc, char **argv, char **envp)
 		}
 		cldata = malloc(sizeof(*cldata));
 		if (!cldata) {
-			fprintf(stderr, "Out of memory. Tried to allocate %ld\n", sizeof(*cldata));
+			fprintf(stderr, "Out of memory. Tried to allocate "LU"\n", sizeof(*cldata));
 			break;
 		}
 		memset(cldata, 0, sizeof(*cldata));
@@ -113,29 +113,29 @@ int main(int argc, char **argv, char **envp)
 			printf("FS: %p\n", (void *)cldata->regs.fs);
 			printf("GS: %p\n", (void *)cldata->regs.gs);
 			printf("FPVALID: %d\n", cldata->u_fpvalid);
-			printf("TSize: %ld\n", cldata->u_tsize);
-			printf("DSize: %ld\n", cldata->u_dsize);
-			printf("SSize: %ld\n", cldata->u_ssize);
+			printf("TSize: "LU"\n", cldata->u_tsize);
+			printf("DSize: "LU"\n", cldata->u_dsize);
+			printf("SSize: "LU"\n", cldata->u_ssize);
 			printf("Start code: %p\n", (void *)cldata->start_code);
 			printf("Start stack: %p\n", (void *)cldata->start_stack);
-			printf("Signal: %ld\n", cldata->signal);
+			printf("Signal: "LU"\n", cldata->signal);
 			printf("Reserved: %d\n", cldata->reserved);
 			printf("AR0: %p\n", (void *)cldata->u_ar0);
 			printf("FPSTATE: %p\n", (void *)cldata->u_fpstate);
-			printf("MAGIC: %ld\n", cldata->magic);
+			printf("MAGIC: "LU"\n", cldata->magic);
 			printf("U_COMM: %s\n", cldata->u_comm);
 		}
 		cldata->regs.orig_rax++;
 		ptrace(PTRACE_SETREGS, pid, NULL, cldata);
 		if ((retval = ptrace(PTRACE_PEEKUSER, pid, offsetof(struct user, u_fpvalid), NULL)) < 0) {
 			int err = errno;
-			printf("[%s:%d] Return value: %ld Error: %s\n", __func__, __LINE__, retval, strerror(err));
+			printf("[%s:%d] Return value: "LU" Error: %s\n", __func__, __LINE__, retval, strerror(err));
 		} else {
 			cldata->start_code = retval;
 			printf("Start code: %p\n", (void *)cldata->start_code);
 		}
 		retval = ptrace(PTRACE_PEEKTEXT, pid, cldata->regs.rip, NULL);
-		printf("[%s:%d] Return value: %ld. \n", __func__, __LINE__, retval);
+		printf("[%s:%d] Return value: "LU". \n", __func__, __LINE__, retval);
         if (argc > 2) {
             ptrace(PTRACE_CONT, pid, 0, 0);
         }

@@ -202,5 +202,13 @@
 
 #cmakedefine HOTPATCH_USE_ASM
 
+#if __WORDSIZE == 64
+	#define LX "%lx"
+	#define LU "%lu"
+#else
+	#define LX "%x"
+	#define LU "%u"
+#endif
+
 #endif /* __LIBHOTPATCH_CONFIG_H__ */
 

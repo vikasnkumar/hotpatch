@@ -35,13 +35,6 @@
 	#include <call32.h>
 	#include <call64.h>
 #endif
-#if __WORDSIZE == 64
-	#define HP_INSTRUCTIONPTR_STR "RIP"
-	#define HP_INSTRUCTIONPTR(A) A.regs.rip
-#else
-	#define HP_INSTRUCTIONPTR_STR "EIP"
-	#define HP_INSTRUCTIONPTR(A) A.regs.eip
-#endif
 
 #define LIB_LD "ld"
 #define LIB_C "libc"
@@ -527,6 +520,15 @@ static int hp_pokedata(pid_t pid, uintptr_t target, uintptr_t pokedata,
 
 int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
 {
+#undef HP_INTXNPTR_STR
+#undef HP_INTXNPTR
+#if __WORDSIZE == 64
+	#define HP_INTXNPTR_STR "RIP"
+	#define HP_INTXNPTR(A) A.regs.rip
+#else
+	#define HP_INTXNPTR_STR "EIP"
+	#define HP_INTXNPTR(A) A.regs.eip
+#endif
 	int rc = -1;
 	if (ptr && hp && hp->attached) {
 		struct user regs;
@@ -538,11 +540,11 @@ int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
 		} else {
 			if (hp->verbose > 1)
 				fprintf(stderr, "[%s:%d] %s is %p\n", __func__, __LINE__,
-						HP_INSTRUCTIONPTR_STR,
-						(void *)HP_INSTRUCTIONPTR(regs));
+						HP_INTXNPTR_STR,
+						(void *)HP_INTXNPTR(regs));
 			if (ptr == hp->exe_entry_point)
 				ptr += sizeof(void *);
-			HP_INSTRUCTIONPTR(regs) = ptr;
+			HP_INTXNPTR(regs) = ptr;
 			if (ptrace(PTRACE_SETREGS, hp->pid, NULL, &regs) < 0) {
 				int err = errno;
 				fprintf(stderr, "[%s:%d] Ptrace setregs failed with error %s\n",
@@ -566,8 +568,6 @@ int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
 	}
 	return rc;
 }
-
-#if __WORDSIZE == 64
 
 int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 							const unsigned char *data, size_t datalen,
@@ -623,13 +623,14 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 		uintptr_t heapptr = 0;
 #undef HP_SETEXECWAITGET
 #undef HP_NULLIFYSTACK
+#undef HP_PASS_ARGS2FUNC
 #define HP_NULLIFYSTACK() \
 do { \
 	if (verbose > 1) \
 		fprintf(stderr, "[%s:%d] Copying Null code to stack.\n", \
 			__func__, __LINE__); \
 	nullcode = 0; \
-	if ((rc = hp_pokedata(hp->pid, iregs.regs.rsp, nullcode, verbose)) < 0) \
+	if ((rc = hp_pokedata(hp->pid, HP_INTXNPTR(iregs), nullcode, verbose)) < 0) \
 		break; \
 } while (0)
 
@@ -653,6 +654,21 @@ do { \
 	if ((rc = hp_get_regs(hp->pid, &iregs)) < 0) \
 		break; \
 } while (0)
+#if __WORDSIZE == 64
+	#define HP_RESULT(A) A.regs.rax
+	#define HP_PASS_ARGS2FUNC(A,FN,ARG1,ARG2) \
+	do { \
+		A.regs.rsi = ARG2; \
+		A.regs.rdi = ARG1; \
+		A.regs.rip = FN; \
+		A.regs.rax = 0; \
+	} while (0)
+#else /* __WORDSIZE == 64 */
+	#define HP_RESULT(A) A.regs.eax
+	#define HP_PASS_ARGS2FUNC(A,fn,a1,a2) \
+	do { \
+	} while (0)
+#endif /* __WORDSIZE == 64 */
 		/* Prepare the child for injection */
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Attaching to PID %d\n", __func__,
@@ -671,17 +687,14 @@ do { \
 		memcpy(&iregs, &oregs, sizeof(oregs));
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying stack out.\n", __func__, __LINE__);
-		if ((rc = hp_peekdata(hp->pid, iregs.regs.rsp, &stack, verbose)) < 0)
+		if ((rc = hp_peekdata(hp->pid, HP_INTXNPTR(iregs), &stack, verbose)) < 0)
 			break;
 		/* Call malloc */
 		HP_NULLIFYSTACK();
-		iregs.regs.rsi = 0;
-		iregs.regs.rdi = tgtsz;
-		iregs.regs.rip = hp->fn_malloc;
-		iregs.regs.rax = 0;
+		HP_PASS_ARGS2FUNC(iregs, hp->fn_malloc, tgtsz, 0);
 		HP_SETEXECWAITGET("malloc");
-		result = iregs.regs.rax;
-		heapptr = iregs.regs.rax; /* keep a copy of this pointer */
+		result = HP_RESULT(iregs);
+		heapptr = HP_RESULT(iregs); /* keep a copy of this pointer */
 		/* Copy data to the malloced area */
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying "LU" bytes to 0x"LX".\n", __func__,
@@ -692,12 +705,10 @@ do { \
 			break;
 		/* Call dlopen */
 		HP_NULLIFYSTACK();
-		iregs.regs.rsi = RTLD_LAZY | RTLD_GLOBAL;
-		iregs.regs.rdi = result; /* the value from malloc() */
-		iregs.regs.rip = hp->fn_dlopen;
-		iregs.regs.rax = 0;
+		HP_PASS_ARGS2FUNC(iregs, hp->fn_dlopen, result /* value from malloc */,
+					(RTLD_LAZY | RTLD_GLOBAL));
 		HP_SETEXECWAITGET("dlopen");
-		result = iregs.regs.rax;
+		result = HP_RESULT(iregs);
 		if (verbose > 0)
 			fprintf(stderr, "[%s:%d] Dll opened at 0x"LX"\n", __func__, __LINE__,
 				result);
@@ -706,28 +717,25 @@ do { \
 		/* Call dlsym */
 		if (symbol && hp->fn_dlsym && result != 0) {
 			HP_NULLIFYSTACK();
-			iregs.regs.rsi = heapptr + dllsz;
-			iregs.regs.rdi = result; /* the value from dlopen() */
-			iregs.regs.rip = hp->fn_dlsym;
-			iregs.regs.rax = 0;
+			HP_PASS_ARGS2FUNC(iregs, hp->fn_dlsym,
+					result /* value from dlopen */,
+					(heapptr + dllsz));
 			HP_SETEXECWAITGET("dlsym");
-			result = iregs.regs.rax;
+			result = HP_RESULT(iregs);
 			if (verbose > 0)
 				fprintf(stderr, "[%s:%d] Symbol %s found at 0x"LX"\n",
 						__func__, __LINE__, symbol, result);
 			if (result != 0) {
 				HP_NULLIFYSTACK();
 				if (datasz > 0) {
-					iregs.regs.rsi = datasz;
-					iregs.regs.rdi = heapptr + dllsz + symsz;
+					HP_PASS_ARGS2FUNC(iregs, result /* value from dlsym */,
+								(heapptr + dllsz + symsz), datasz);
 				} else {
-					iregs.regs.rsi = 0;
-					iregs.regs.rdi = 0;
+					HP_PASS_ARGS2FUNC(iregs, result /* value from dlsym */,
+								0, 0);
 				}
-				iregs.regs.rip = result; /* the value from dlsym() */
-				iregs.regs.rax = 0;
 				HP_SETEXECWAITGET(symbol);
-				result = iregs.regs.rax;
+				result = HP_RESULT(iregs);
 				if (verbose > 0)
 					fprintf(stderr, "[%s:%d] Return value from invoking %s(): %p\n",
 							__func__, __LINE__, symbol, (void *)result);
@@ -763,7 +771,7 @@ do { \
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying stack back.\n",
 					__func__, __LINE__);
-		if ((rc = hp_pokedata(hp->pid, oregs.regs.rsp, stack, verbose)) < 0)
+		if ((rc = hp_pokedata(hp->pid, HP_INTXNPTR(oregs), stack, verbose)) < 0)
 			break;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Executing...\n", __func__, __LINE__);
@@ -784,19 +792,10 @@ do { \
 	if (mdata)
 		free(mdata);
 	mdata = NULL;
+#undef HP_PASS_ARGS2FUNC
 #undef HP_SETEXECWAITGET
 #undef HP_NULLIFYSTACK
+#undef HP_INTXNPTR_STR
+#undef HP_INTXNPTR
 	return rc;
 }
-
-
-#else /* __WORDSIZE == 64 */
-
-int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
-							const unsigned char *data, size_t datalen,
-							uintptr_t *outaddr, uintptr_t *outres)
-{
-	return -1;
-}
-
-#endif /* __WORDSIZE == 64 */

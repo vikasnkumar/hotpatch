@@ -35,6 +35,13 @@
 	#include <call32.h>
 	#include <call64.h>
 #endif
+#if __WORDSIZE == 64
+	#define HP_INSTRUCTIONPTR_STR "RIP"
+	#define HP_INSTRUCTIONPTR(A) A.regs.rip
+#else
+	#define HP_INSTRUCTIONPTR_STR "EIP"
+	#define HP_INSTRUCTIONPTR(A) A.regs.eip
+#endif
 
 #define LIB_LD "ld"
 #define LIB_C "libc"
@@ -518,6 +525,48 @@ static int hp_pokedata(pid_t pid, uintptr_t target, uintptr_t pokedata,
 	return 0;
 }
 
+int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
+{
+	int rc = -1;
+	if (ptr && hp && hp->attached) {
+		struct user regs;
+		memset(&regs, 0, sizeof(regs));
+		if (ptrace(PTRACE_GETREGS, hp->pid, NULL, &regs) < 0) {
+			int err = errno;
+			fprintf(stderr, "[%s:%d] Ptrace getregs failed with error %s\n",
+					__func__, __LINE__, strerror(err));
+		} else {
+			if (hp->verbose > 1)
+				fprintf(stderr, "[%s:%d] %s is %p\n", __func__, __LINE__,
+						HP_INSTRUCTIONPTR_STR,
+						(void *)HP_INSTRUCTIONPTR(regs));
+			if (ptr == hp->exe_entry_point)
+				ptr += sizeof(void *);
+			HP_INSTRUCTIONPTR(regs) = ptr;
+			if (ptrace(PTRACE_SETREGS, hp->pid, NULL, &regs) < 0) {
+				int err = errno;
+				fprintf(stderr, "[%s:%d] Ptrace setregs failed with error %s\n",
+						__func__, __LINE__, strerror(err));
+			} else {
+				if (hp->verbose > 0)
+					fprintf(stderr, "[%s:%d] Set RIP to 0x"LX"\n", __func__,
+							__LINE__, ptr);
+				rc = 0;
+			}
+		}
+	} else {
+		if (!ptr) {
+			fprintf(stderr, "[%s:%d] The execution pointer is null.\n",
+					__func__, __LINE__);
+		}
+		if (!hp || !hp->attached) {
+			fprintf(stderr, "[%s:%d] The process is not attached to.\n",
+					__func__, __LINE__);
+		}
+	}
+	return rc;
+}
+
 #if __WORDSIZE == 64
 
 int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
@@ -740,89 +789,8 @@ do { \
 	return rc;
 }
 
-int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
-{
-	int rc = -1;
-	if (ptr && hp && hp->attached) {
-		struct user regs;
-		memset(&regs, 0, sizeof(regs));
-		if (ptrace(PTRACE_GETREGS, hp->pid, NULL, &regs) < 0) {
-			int err = errno;
-			fprintf(stderr, "[%s:%d] Ptrace getregs failed with error %s\n",
-					__func__, __LINE__, strerror(err));
-		} else {
-			if (hp->verbose > 1)
-				fprintf(stderr, "[%s:%d] RIP is 0x"LX"\n", __func__, __LINE__,
-						regs.regs.rip);
-			if (ptr == hp->exe_entry_point)
-				ptr += sizeof(void *);
-			regs.regs.rip = ptr;
-			if (ptrace(PTRACE_SETREGS, hp->pid, NULL, &regs) < 0) {
-				int err = errno;
-				fprintf(stderr, "[%s:%d] Ptrace setregs failed with error %s\n",
-						__func__, __LINE__, strerror(err));
-			} else {
-				if (hp->verbose > 0)
-					fprintf(stderr, "[%s:%d] Set RIP to 0x"LX"\n", __func__,
-							__LINE__, ptr);
-				rc = 0;
-			}
-		}
-	} else {
-		if (!ptr) {
-			fprintf(stderr, "[%s:%d] The execution pointer is null.\n",
-					__func__, __LINE__);
-		}
-		if (!hp || !hp->attached) {
-			fprintf(stderr, "[%s:%d] The process is not attached to.\n",
-					__func__, __LINE__);
-		}
-	}
-	return rc;
-}
 
 #else /* __WORDSIZE == 64 */
-
-int hotpatch_set_execution_pointer(hotpatch_t *hp, uintptr_t ptr)
-{
-	int rc = -1;
-	if (ptr && hp && hp->attached) {
-		struct user regs;
-		memset(&regs, 0, sizeof(regs));
-		if (ptrace(PTRACE_GETREGS, hp->pid, NULL, &regs) < 0) {
-			int err = errno;
-			fprintf(stderr, "[%s:%d] Ptrace getregs failed with error %s\n",
-					__func__, __LINE__, strerror(err));
-		} else {
-			if (hp->verbose > 1)
-				fprintf(stderr, "[%s:%d] EIP is %p\n", __func__, __LINE__,
-						(void *)regs.regs.eip);
-			if (ptr == hp->exe_entry_point)
-				ptr += sizeof(void *);
-			regs.regs.eip = ptr;
-			if (ptrace(PTRACE_SETREGS, hp->pid, NULL, &regs) < 0) {
-				int err = errno;
-				fprintf(stderr, "[%s:%d] Ptrace setregs failed with error %s\n",
-						__func__, __LINE__, strerror(err));
-			} else {
-				if (hp->verbose > 0)
-					fprintf(stderr, "[%s:%d] Set EIP to 0x"LX"\n", __func__,
-							__LINE__, ptr);
-				rc = 0;
-			}
-		}
-	} else {
-		if (!ptr) {
-			fprintf(stderr, "[%s:%d] The execution pointer is null.\n",
-					__func__, __LINE__);
-		}
-		if (!hp || !hp->attached) {
-			fprintf(stderr, "[%s:%d] The process is not attached to.\n",
-					__func__, __LINE__);
-		}
-	}
-	return rc;
-}
 
 int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 							const unsigned char *data, size_t datalen,

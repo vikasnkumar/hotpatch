@@ -35,8 +35,10 @@ with the timestamp at which the .so file was injected and anything else.
 
 Limitations
 ============
-NOTE: Currently it works only for x86-64-bit libraries and processes, and it will be
-made available to x86 (32-bit) applications in the next version.
+NOTE: Currently if hotpatch is compiled in 64-bit mode, it can inject libraries
+only in 64-bit processes, and if compiled in 32-bit mode can inject libraries
+only in 32-bit processes. It cannot inject from a 64-bit to a 32-bit process or
+from a 32-bit to a 64-bit process.
 
 There are some limitations, the main being that the user can inject a library
 .so file only in a process on which the user has privileges over. For example,

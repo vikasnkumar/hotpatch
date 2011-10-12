@@ -623,7 +623,6 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 		struct user iregs; /* intermediate registers */
 		struct user oregs; /* original registers */
 		int verbose = hp->verbose;
-		uintptr_t nullcode = 0;
 		uintptr_t result = 0;
 		uintptr_t stack = 0;
 		uintptr_t heapptr = 0;
@@ -632,10 +631,10 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 #undef HP_PASS_ARGS2FUNC
 #define HP_NULLIFYSTACK() \
 do { \
+	uintptr_t nullcode = 0; \
 	if (verbose > 1) \
-		fprintf(stderr, "[%s:%d] Copying Null code to stack.\n", \
+		fprintf(stderr, "[%s:%d] Copying Null to stack.\n", \
 			__func__, __LINE__); \
-	nullcode = 0; \
 	if ((rc = hp_pokedata(hp->pid, HP_REG_SP(iregs), nullcode, verbose)) < 0) \
 		break; \
 } while (0)

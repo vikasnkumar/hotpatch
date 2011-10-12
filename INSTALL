@@ -25,7 +25,7 @@ If you're on a 64-bit system and want to compile for 32-bit, you can do the
 following:
 
 $ make ARCH=i386
-$ make test
+$ make test ARCH=i386
 $ make install ARCH=i386
 
 Debug build:
@@ -43,5 +43,5 @@ If you're on a 64-bit system and want to compile for 32-bit, you can do the
 following:
 
 $ make debug ARCH=i386
-$ make testdebug
+$ make testdebug ARCH=i386
 $ make installdebug ARCH=i386

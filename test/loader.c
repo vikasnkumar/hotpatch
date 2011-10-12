@@ -54,11 +54,19 @@ int main(int argc, char **argv)
 	assert(ret < 0);
 	ret = ld_find_library(maps, mapnum, "libc", false, NULL, 6);
 	assert(ret >= 0);
+#if __WORDSIZE == 64
 	ret = ld_find_library(maps, mapnum, "/lib/ld-linux-x86-64.so.2",
 						  true, NULL, 6);
 	assert(ret >= 0);
 	ret = ld_find_library(maps, mapnum, "/lib64/ld-linux-x86-64.so.2",
 						  false, NULL, 6);
+#else
+	ret = ld_find_library(maps, mapnum, "/lib/ld-linux.so.2",
+						  true, NULL, 6);
+	assert(ret >= 0);
+	ret = ld_find_library(maps, mapnum, "/lib32/ld-linux.so.2",
+						  false, NULL, 6);
+#endif
 	assert(ret < 0);
 	ld_free_maps(maps, mapnum);
     return 0;

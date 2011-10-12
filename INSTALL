@@ -21,6 +21,13 @@ directory then you can do the following:
 
 $ make install PREFIX=/path/to/install
 
+If you're on a 64-bit system and want to compile for 32-bit, you can do the
+following:
+
+$ make ARCH=i386
+$ make test
+$ make install ARCH=i386
+
 Debug build:
 
 $ make debug
@@ -32,3 +39,9 @@ directory then you can do the following:
 
 $ make installdebug PREFIX=/path/to/install
 
+If you're on a 64-bit system and want to compile for 32-bit, you can do the
+following:
+
+$ make debug ARCH=i386
+$ make testdebug
+$ make installdebug ARCH=i386

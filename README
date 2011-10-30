@@ -5,7 +5,7 @@ Hotpatch is a library that can be used to dynamically load a shared library
 without affecting the execution of the target process. The API is a C API, but
 also supported in C++.
 
-The current version is 0.1.
+The current version is 0.2.
 
 The limitations, directions on how to use, and possible uses of hotpatch will be
 explained in this document.

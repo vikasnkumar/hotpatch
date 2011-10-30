@@ -39,7 +39,7 @@ extern "C" {
 #include <stdint.h>
 
 #define HOTPATCH_MAJOR_VERSION 0
-#define HOTPATCH_MINOR_VERSION 1
+#define HOTPATCH_MINOR_VERSION 2
 
 #ifndef HOTPATCH_LINUX_START
 	#define HOTPATCH_LINUX_START "_start"

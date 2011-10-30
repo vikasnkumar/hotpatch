@@ -624,8 +624,10 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 		struct user oregs; /* original registers */
 		int verbose = hp->verbose;
 		uintptr_t result = 0;
-		uintptr_t stack = 0;
+		uintptr_t stack[4] = { 0, 0, 0, 0}; /* max arguments of the functions we
+											   are using */
 		uintptr_t heapptr = 0;
+		int idx = 0;
 #undef HP_SETEXECWAITGET
 #undef HP_NULLIFYSTACK
 #undef HP_PASS_ARGS2FUNC
@@ -704,7 +706,12 @@ do { \
 		memcpy(&iregs, &oregs, sizeof(oregs));
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying stack out.\n", __func__, __LINE__);
-		if ((rc = hp_peekdata(hp->pid, HP_REG_SP(iregs), &stack, verbose)) < 0)
+		for (idx = 0; idx < sizeof(stack)/sizeof(uintptr_t); ++idx) {
+			if ((rc = hp_peekdata(hp->pid, HP_REG_SP(iregs) +
+							idx * sizeof(size_t), &stack[idx], verbose)) < 0)
+				break;
+		}
+		if (rc < 0)
 			break;
 		/* Call malloc */
 		HP_NULLIFYSTACK();
@@ -788,7 +795,12 @@ do { \
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying stack back.\n",
 					__func__, __LINE__);
-		if ((rc = hp_pokedata(hp->pid, HP_REG_SP(oregs), stack, verbose)) < 0)
+		for (idx = 0; idx < sizeof(stack)/sizeof(uintptr_t); ++idx) {
+			if ((rc = hp_pokedata(hp->pid, HP_REG_SP(oregs) +
+							idx * sizeof(size_t), stack[idx], verbose)) < 0)
+				break;
+		}
+		if (rc < 0)
 			break;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Executing...\n", __func__, __LINE__);

@@ -27,8 +27,9 @@
 ### (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 ### SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ###
-CMAKE=/usr/bin/cmake
-PREFIX=/usr/local
+CMAKE=$(shell which cmake)
+CTEST=$(shell which ctest)
+PREFIX?=/usr/local
 ARCH=$(shell uname -m)
 
 default: release
@@ -73,11 +74,11 @@ cleandebug:
 .PHONY: cleandebug
 
 testrelease: release
-	cd Release && $(MAKE) test
+	cd Release && $(CTEST)
 .PHONY: testrelease
 
 testdebug: debug
-	cd Debug && $(MAKE) test
+	cd Debug && $(CTEST)
 .PHONY: testdebug
 
 installrelease: release

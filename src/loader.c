@@ -494,7 +494,10 @@ uintptr_t ld_find_address(const struct ld_library *lib, const char *symbol,
 						fprintf(stderr, "[%s:%d] Found %s in symbol list at "
 								""LU" with address offset "LX"\n", __func__,
 								__LINE__, symbol, idx, syms[idx].address);
-					ptr = syms[idx].address + lib->addr_begin;
+					if (syms[idx].address > lib->addr_begin)
+						ptr = syms[idx].address;
+					else
+						ptr = syms[idx].address + lib->addr_begin;
 					break;
 				}
 			}

@@ -194,7 +194,6 @@ static int exe_load_symbol_table(struct elf_internals *ei, Elf_Shdr *symh,
 								 Elf_Shdr *strh, int verbose)
 {
 	char *strsymtbl = NULL;
-	size_t strsymtbl_size = 0;
 	while (ei && symh && strh) {
 		if (verbose > 3)
 			fprintf(stderr, "[%s:%d] Retrieving symbol table.\n", __func__,
@@ -203,7 +202,6 @@ static int exe_load_symbol_table(struct elf_internals *ei, Elf_Shdr *symh,
 			LOG_ERROR_FILE_SEEK;
 			break;
 		}
-		strsymtbl_size = strh->sh_size + 0;
 		strsymtbl = malloc(strh->sh_size);
 		if (!strsymtbl) {
 			LOG_ERROR_OUT_OF_MEMORY;

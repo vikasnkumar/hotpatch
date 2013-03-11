@@ -627,7 +627,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 		uintptr_t stack[4] = { 0, 0, 0, 0}; /* max arguments of the functions we
 											   are using */
 		uintptr_t heapptr = 0;
-		int idx = 0;
+		unsigned int idx = 0;
 #undef HP_SETEXECWAITGET
 #undef HP_NULLIFYSTACK
 #undef HP_PASS_ARGS2FUNC

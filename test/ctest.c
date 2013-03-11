@@ -30,9 +30,15 @@
  */
 #include <hotpatch.h>
 
+#define UNUSED(X) (void)(X)
+
 int main(int argc, char **argv)
 {
     hotpatch_t *hp = 0;
+
+	UNUSED(argc);
+	UNUSED(argv);
+
 	if (hp) {}
     return 0;
 }

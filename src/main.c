@@ -232,5 +232,8 @@ int main(int argc, char **argv)
 	if (opts.dll)
 		free(opts.dll);
 	opts.dll = NULL;
+	if(opts.data)
+		free(opts.data);
+	opts.data = NULL;
     return rc;
 }

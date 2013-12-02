@@ -669,6 +669,8 @@ do { \
 		A.regs.rip = FN; \
 		A.regs.rax = 0; \
 	} while (0)
+    #define HP_REDZONE 128
+        /* David Yeager pointed this out. http://en.wikipedia.org/wiki/Red_zone_(computing) */
 #else /* __WORDSIZE == 64 */
 	#define HP_PASS_ARGS2FUNC(A,FN,ARG1,ARG2) \
 	do { \
@@ -687,6 +689,7 @@ do { \
 		A.regs.eip = FN; \
 		A.regs.eax = 0; \
 	} while (0)
+    #define HP_REDZONE 0
 #endif /* __WORDSIZE == 64 */
 		/* Prepare the child for injection */
 		if (verbose > 1)
@@ -704,6 +707,7 @@ do { \
 		if ((rc = hp_get_regs(hp->pid, &oregs)) < 0)
 			break;
 		memcpy(&iregs, &oregs, sizeof(oregs));
+        HP_REG_SP(iregs) -= HP_REDZONE;
 		if (verbose > 1)
 			fprintf(stderr, "[%s:%d] Copying stack out.\n", __func__, __LINE__);
 		for (idx = 0; idx < sizeof(stack)/sizeof(uintptr_t); ++idx) {
@@ -796,8 +800,8 @@ do { \
 			fprintf(stderr, "[%s:%d] Copying stack back.\n",
 					__func__, __LINE__);
 		for (idx = 0; idx < sizeof(stack)/sizeof(uintptr_t); ++idx) {
-			if ((rc = hp_pokedata(hp->pid, HP_REG_SP(oregs) +
-							idx * sizeof(size_t), stack[idx], verbose)) < 0)
+			if ((rc = hp_pokedata(hp->pid, HP_REG_SP(oregs) - HP_REDZONE
+                            + idx * sizeof(size_t), stack[idx], verbose)) < 0)
 				break;
 		}
 		if (rc < 0)
@@ -828,5 +832,6 @@ do { \
 #undef HP_REG_IP
 #undef HP_REG_SP
 #undef HP_REG_AX
+#undef HP_REDZONE
 	return rc;
 }

@@ -38,6 +38,8 @@ struct hp_options {
 	char *symbol;
 	bool dryrun;
 	char *dll;
+	char *data;
+	size_t data_length;
 };
 
 void print_usage(const char *app)
@@ -53,6 +55,7 @@ void print_usage(const char *app)
 	printf("-s <name>    Symbol to invoke during the dll inject. Optional.\n");
 	printf("-x <name>    Set execution pointer to symbol. Cannot be set with "
 			"-s option\n");
+	printf("-d <data>    Data passed to the symbol\n");
 }
 
 void print_options(const struct hp_options *opts)
@@ -84,7 +87,7 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
         optind = 1;
 		opts->is__start = false;
 		opts->dryrun = false;
-        while ((opt = getopt(argc, argv, "hNVs:x::l:v::")) != -1) {
+        while ((opt = getopt(argc, argv, "hNVs:x::l:v::d:")) != -1) {
             switch (opt) {
             case 'v':
                 opts->verbose += optarg ? (int)strnlen(optarg, 5) : 1;
@@ -134,6 +137,13 @@ int parse_arguments(int argc, char **argv, struct hp_options *opts)
 					return 1;
 				}
 				break;
+			case 'd':
+				opts->data = strdup(optarg);
+				if(!opts->data) {
+					printf("[%s:%d] Out of memory\n", __func__, __LINE__);
+				}
+				opts->data_length = strlen(opts->data)+1;
+				break;
 			case 'h':
             default:
                 print_usage(argv[0]);
@@ -180,7 +190,7 @@ int main(int argc, char **argv)
 		if (opts.dll) {
 			uintptr_t dlres = 0;
 			uintptr_t symres = 0;
-			rc = hotpatch_inject_library(hp, opts.dll, opts.symbol, NULL, 0,
+			rc = hotpatch_inject_library(hp, opts.dll, opts.symbol, (unsigned char *)opts.data, opts.data_length,
 										 &dlres, &symres);
 			if (rc >=0) {
 				printf("Dll was injected at %p\n", (void *)dlres);
@@ -222,5 +232,8 @@ int main(int argc, char **argv)
 	if (opts.dll)
 		free(opts.dll);
 	opts.dll = NULL;
+	if(opts.data)
+		free(opts.data);
+	opts.data = NULL;
     return rc;
 }

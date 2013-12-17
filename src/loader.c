@@ -94,7 +94,7 @@ void ld_procmaps_dump(struct ld_procmaps *pm)
 			pm->filetype);
 }
 
-int ld_procmaps_parse(char *buf, size_t bufsz, struct ld_procmaps *pm,
+int ld_procmaps_parse(char *buf, struct ld_procmaps *pm,
                  const char *appname, int verbose)
 {
     if (!buf || !pm) {
@@ -293,7 +293,7 @@ struct ld_procmaps *ld_load_maps(pid_t pid, int verbose, size_t *num)
 			if (verbose > 3)
 				fprintf(stderr, "[%s:%d] Parsing %s\n", __func__, __LINE__,
 						buf);
-			if (ld_procmaps_parse(buf, bufsz, pm, appname, verbose) < 0) {
+			if (ld_procmaps_parse(buf, pm, appname, verbose) < 0) {
 				if (verbose > 1) {
 					fprintf(stderr, "[%s:%d] Parsing failure. Ignoring.\n",
 							__func__, __LINE__);

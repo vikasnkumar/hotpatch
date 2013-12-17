@@ -225,11 +225,11 @@ hotpatch_t *hotpatch_create(pid_t pid, int verbose)
 			rc = -1;
 			break;
 		}
-		if (rc < 0) {
-			hotpatch_destroy(hp);
-			hp = NULL;
-		}
 	} while (0);
+	if (rc < 0) {
+		hotpatch_destroy(hp);
+		hp = NULL;
+	}
 	return hp;
 }
 
@@ -273,7 +273,7 @@ uintptr_t hotpatch_read_symbol(hotpatch_t *hp, const char *symbol, int *type, si
 	uintptr_t ptr = 0;
 	size_t idx = 0;
 	if (!hp || !symbol || !hp->exe_symbols) {
-		if (hp->verbose > 2)
+		if (!hp || hp->verbose > 2)
 			fprintf(stderr, "[%s:%d] Invalid arguments.\n", __func__, __LINE__);
 		return (uintptr_t)0;
 	}
@@ -627,7 +627,7 @@ int hotpatch_inject_library(hotpatch_t *hp, const char *dll, const char *symbol,
 		uintptr_t stack[4] = { 0, 0, 0, 0}; /* max arguments of the functions we
 											   are using */
 		uintptr_t heapptr = 0;
-		int idx = 0;
+		unsigned int idx = 0;
 #undef HP_SETEXECWAITGET
 #undef HP_NULLIFYSTACK
 #undef HP_PASS_ARGS2FUNC

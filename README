@@ -55,6 +55,19 @@ Another limitation is that injection for a particular .so file can happen only
 once in the target process. Each library that is injected can be injected only
 once into the target process.
 
+
+Ubuntu Ptrace()
+===============
+
+On Ubuntu, `ptrace()` of non-child processes has been blocked as a security
+feature. To get around it you will need to set
+`/proc/sys/kernel/yama/ptrace_scope` to 0 as below
+
+
+bash> echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+
+
+
 Usage: API
 ===========
 
@@ -128,11 +141,15 @@ The commandline "hotpatcher" can be executed with the "-h" option to see the
 various options that are supported.
 
 A sample execution of "hotpatcher" into the current running shell can be done as
-below:
+below. 
 
-Let's say the library libhotpatchtest.so is in the current directory.
+We can compile a fresh one to make sure we are picking up the correct library.
 
-bash> ./hotpatcher -l ./libhotpatchtest.so -s mysym -v1 $$
+
+bash> make release
+bash> cd Release
+bash> ./src/hotpatcher -vvvv -l $PWD/test/libhotpatchtest.so -s mysym $$
+
 
 On success the "/tmp/hotpatchtest.log" file can be checked if it has the
 timestamp of the injection.
